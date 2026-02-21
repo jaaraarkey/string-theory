@@ -181,32 +181,31 @@ const vertexShader = `
     gl_PointSize = (100.0 / -mvPosition.z) * (0.5 + taper * 1.5 + interactionForce * 5.0);
 
     // ---- PALETTE (dimmed ~50% of true vibrancy for atmospheric glow) ----
-    // Amber Gold   #ffbe0b -> rgb(255,190,11)   dimmed
-    vec3 palAmberGold   = vec3(0.50, 0.37, 0.02);
-    // Blaze Orange #fb5607 -> rgb(251,86,7)     dimmed
-    vec3 palBlazeOrange = vec3(0.49, 0.17, 0.01);
-    // Neon Pink    #ff006e -> rgb(255,0,110)     dimmed
-    vec3 palNeonPink    = vec3(0.50, 0.00, 0.22);
-    // Blue Violet  #8338ec -> rgb(131,56,236)   dimmed
-    vec3 palBlueViolet  = vec3(0.26, 0.11, 0.46);
-    // Azure Blue   #3a86ff -> rgb(58,134,255)   dimmed
-    vec3 palAzureBlue   = vec3(0.11, 0.26, 0.50);
+    // Neon Pink         #f72585 -> rgb(247, 37, 133)   dimmed
+    vec3 palNeonPink       = vec3(0.485, 0.073, 0.261);
+    // Indigo Bloom      #7209b7 -> rgb(114,  9, 183)   dimmed
+    vec3 palIndigoBoom     = vec3(0.224, 0.018, 0.359);
+    // Vivid Royal       #3a0ca3 -> rgb( 58, 12, 163)   dimmed
+    vec3 palVividRoyal     = vec3(0.114, 0.024, 0.320);
+    // Electric Sapphire #4361ee -> rgb( 67, 97, 238)   dimmed
+    vec3 palElecSapphire   = vec3(0.132, 0.190, 0.467);
+    // Sky Aqua          #4cc9f0 -> rgb( 76,201, 240)   dimmed
+    vec3 palSkyAqua        = vec3(0.149, 0.395, 0.471);
 
-    // The 5 colors are cycled based on (stringId + tAlong) over time
-    // Each period covers all 5 colors in a smooth gradient loop
+    // Cycle smoothly through all 5 colors along each string
     float cycle = mod(stringId * 0.037 + tAlong * 2.0 + flowTime * 0.8, 5.0);
     
     vec3 palColor;
     if (cycle < 1.0) {
-      palColor = mix(palAmberGold,   palBlazeOrange, cycle);
+      palColor = mix(palNeonPink,     palIndigoBoom,   cycle);
     } else if (cycle < 2.0) {
-      palColor = mix(palBlazeOrange, palNeonPink,    cycle - 1.0);
+      palColor = mix(palIndigoBoom,   palVividRoyal,   cycle - 1.0);
     } else if (cycle < 3.0) {
-      palColor = mix(palNeonPink,    palBlueViolet,  cycle - 2.0);
+      palColor = mix(palVividRoyal,   palElecSapphire, cycle - 2.0);
     } else if (cycle < 4.0) {
-      palColor = mix(palBlueViolet,  palAzureBlue,   cycle - 3.0);
+      palColor = mix(palElecSapphire, palSkyAqua,      cycle - 3.0);
     } else {
-      palColor = mix(palAzureBlue,   palAmberGold,   cycle - 4.0);
+      palColor = mix(palSkyAqua,      palNeonPink,     cycle - 4.0);
     }
 
     vec3 baseColor = palColor;
@@ -214,9 +213,9 @@ const vertexShader = `
     // Slightly brighten the midpoints of each string (taper effect)
     baseColor = mix(baseColor * 0.5, baseColor, taper);
     
-    // Mouse vortex: flash brighter versions of Neon Pink & Amber Gold
-    vec3 swirlColorA = vec3(1.0, 0.0, 0.43);   // Full-brightness Neon Pink
-    vec3 swirlColorB = vec3(1.0, 0.75, 0.04);  // Full-brightness Amber Gold
+    // Mouse vortex: flash full-brightness Neon Pink & Sky Aqua
+    vec3 swirlColorA = vec3(0.969, 0.145, 0.522);  // Full-brightness Neon Pink
+    vec3 swirlColorB = vec3(0.298, 0.789, 0.941);  // Full-brightness Sky Aqua
 
     float swirlColorMix = sin(tAlong * 5.0 + uTime * 2.0 + stringId) * 0.5 + 0.5;
     vec3 activeColor = mix(swirlColorA, swirlColorB, swirlColorMix);
