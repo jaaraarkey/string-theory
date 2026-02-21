@@ -44,9 +44,9 @@ canvas {
 }
 
 h1 {
-  font-size: 4rem;
-  font-weight: 300;
-  letter-spacing: 0.5rem;
+  font-size: 3rem;
+  font-weight: 100;
+  letter-spacing: 0.8rem;
   margin: 0;
   text-transform: uppercase;
 }
@@ -54,7 +54,7 @@ h1 {
 p {
   font-size: 1.2rem;
   color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 0.2rem;
+  letter-spacing: 0.04rem;
   margin-top: 1rem;
 }
 
@@ -64,12 +64,12 @@ p {
   }
 
   h1 {
-    font-size: 4rem;
-    letter-spacing: 0.2rem;
+    font-size: 2rem;
+    letter-spacing: 0.8rem;
   }
 
   p {
-    font-size: 1.8rem;
-    letter-spacing: 0.1rem;
+    font-size: 1rem;
+    /* letter-spacing: 0.01rem; */
   }
 }
