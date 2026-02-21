@@ -317,6 +317,7 @@ const flameVertexShader = `
   varying float vRippleAge;
 
   void main() {
+    float tAlong = uv.x;
     float t = 1.0 - tAlong;
 
     float revolution = uTime * 0.006;
