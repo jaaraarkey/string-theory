@@ -180,45 +180,49 @@ const vertexShader = `
     // BIGGER PARTICLES: Increased base size multiplier from 40.0 to 100.0
     gl_PointSize = (100.0 / -mvPosition.z) * (0.5 + taper * 1.5 + interactionForce * 5.0);
 
-    // Color and aesthetics
-    vec3 colorA = vec3(0.05, 0.1, 0.6); // Deep Ocean Blue
-    vec3 colorB = vec3(0.2, 0.1, 0.3); // Muted, Dark Purple
-    vec3 colorC = vec3(0.0, 0.9, 1.0); // Bright Cyan
-    vec3 colorD = vec3(1.0, 0.95, 0.6); // White-Yellow
-    vec3 colorE = vec3(0.0, 0.05, 0.3); // Very Dark Blue
-    vec3 colorF = vec3(0.0, 0.4, 1.0); // Vibrant Electric Blue
-    vec3 colorG = vec3(0.5, 1.0, 0.5); // Light Green
+    // ---- PALETTE (dimmed ~50% of true vibrancy for atmospheric glow) ----
+    // Amber Gold   #ffbe0b -> rgb(255,190,11)   dimmed
+    vec3 palAmberGold   = vec3(0.50, 0.37, 0.02);
+    // Blaze Orange #fb5607 -> rgb(251,86,7)     dimmed
+    vec3 palBlazeOrange = vec3(0.49, 0.17, 0.01);
+    // Neon Pink    #ff006e -> rgb(255,0,110)     dimmed
+    vec3 palNeonPink    = vec3(0.50, 0.00, 0.22);
+    // Blue Violet  #8338ec -> rgb(131,56,236)   dimmed
+    vec3 palBlueViolet  = vec3(0.26, 0.11, 0.46);
+    // Azure Blue   #3a86ff -> rgb(58,134,255)   dimmed
+    vec3 palAzureBlue   = vec3(0.11, 0.26, 0.50);
+
+    // The 5 colors are cycled based on (stringId + tAlong) over time
+    // Each period covers all 5 colors in a smooth gradient loop
+    float cycle = mod(stringId * 0.037 + tAlong * 2.0 + flowTime * 0.8, 5.0);
     
-    // Vortex Swirling Colors
-    vec3 swirlColorA = vec3(1.0, 0.4, 0.4); // Bright Salmon / Pink
-    vec3 swirlColorB = vec3(0.4, 0.2, 0.5); // Softer, Muted Purple
+    vec3 palColor;
+    if (cycle < 1.0) {
+      palColor = mix(palAmberGold,   palBlazeOrange, cycle);
+    } else if (cycle < 2.0) {
+      palColor = mix(palBlazeOrange, palNeonPink,    cycle - 1.0);
+    } else if (cycle < 3.0) {
+      palColor = mix(palNeonPink,    palBlueViolet,  cycle - 2.0);
+    } else if (cycle < 4.0) {
+      palColor = mix(palBlueViolet,  palAzureBlue,   cycle - 3.0);
+    } else {
+      palColor = mix(palAzureBlue,   palAmberGold,   cycle - 4.0);
+    }
+
+    vec3 baseColor = palColor;
+
+    // Slightly brighten the midpoints of each string (taper effect)
+    baseColor = mix(baseColor * 0.5, baseColor, taper);
     
-    // SLOWED DOWN: Color varies based on random ID and time
-    float mixVal = sin(stringId * 0.01 + flowTime * 0.5) * 0.5 + 0.5;
-    vec3 baseColor = mix(colorA, colorB, mixVal);
-    
-    // Occasionally dip into Very Dark Blue for depth
-    float darkMix = sin(stringId * 0.08 + flowTime * 0.2) * 0.5 + 0.5;
-    baseColor = mix(baseColor, colorE, darkMix * 0.6);
-    
-    // Add white-yellow, electric blue, and light green highlights randomly across the strings
-    float highlightMix = pow(cos(stringId * 0.05 + tAlong * 10.0 + flowTime), 4.0);
-    // Cycle between white-yellow, electric blue, and light green for the peak energy lines
-    float highlightSelector = sin(stringId * 10.0) * 0.5 + 0.5;
-    vec3 peakEnergyColor = mix(colorD, colorF, smoothstep(0.0, 0.5, highlightSelector));
-    peakEnergyColor = mix(peakEnergyColor, colorG, smoothstep(0.5, 1.0, highlightSelector));
-    
-    baseColor = mix(baseColor, peakEnergyColor, highlightMix * 0.8);
-    baseColor = mix(baseColor, colorC, taper * 0.5);
-    
-    // Blend in the fiery/chaotic colors based on swirling and interaction
-    // SLOWED DOWN: Swirl color mix pulsing
+    // Mouse vortex: flash brighter versions of Neon Pink & Amber Gold
+    vec3 swirlColorA = vec3(1.0, 0.0, 0.43);   // Full-brightness Neon Pink
+    vec3 swirlColorB = vec3(1.0, 0.75, 0.04);  // Full-brightness Amber Gold
+
     float swirlColorMix = sin(tAlong * 5.0 + uTime * 2.0 + stringId) * 0.5 + 0.5;
     vec3 activeColor = mix(swirlColorA, swirlColorB, swirlColorMix);
     
     vColor = mix(baseColor, activeColor, interactionForce * 1.2);
     
-    // SLOWED DOWN: Random opacity flashing
     float flash = sin(stringId * 0.05 + uTime * 0.8) * 0.5 + 0.5;
     float depthFade = smoothstep(50.0, -80.0, mvPosition.z);
     
