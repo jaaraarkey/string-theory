@@ -275,8 +275,8 @@ const points = new THREE.LineSegments(geometry, material);
 
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
 // Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = 180;  // number of spiral arms (dense for a galaxy feel)
-const SWIRL_PTS     = 100;  // points per arm
+const SWIRL_ARMS    = 60;   // number of spiral arms
+const SWIRL_PTS     = 70;   // points per arm
 const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
@@ -405,7 +405,16 @@ const targetMouse = new THREE.Vector3(0, 0, 0);
 const centerTarget = new THREE.Vector3(0, 0, 0);
 // Swirl centre target — follows pointer slowly across the full screen
 const swirlCenterTarget = new THREE.Vector3(0, 0, 0);
+// The resting pointer position (where the pointer last stopped)
+const pointerRest = new THREE.Vector3(0, 0, 0);
 const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+
+// Idle orbit state — kicks in once the swirl centre has reached the pointer
+let orbitAngle     = Math.random() * Math.PI * 2;
+let orbitDir       = Math.random() < 0.5 ? 1 : -1;
+let orbitRadius    = 1.5 + Math.random() * 2.5;  // small tight orbit
+let orbitSpeed     = 0.0004 + Math.random() * 0.0004; // very slow
+let isArrived      = false;
 
 window.addEventListener('pointermove', (event) => {
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -420,8 +429,10 @@ window.addEventListener('pointermove', (event) => {
     0
   );
 
-  // Swirl centre follows the pointer directly — no clamp so it travels anywhere on screen
-  swirlCenterTarget.set(targetMouse.x, targetMouse.y, 0);
+  // Update resting position and reset arrived state so swirl chases the new position
+  pointerRest.set(targetMouse.x, targetMouse.y, 0);
+  swirlCenterTarget.copy(pointerRest);
+  isArrived = false;
 });
 
 // Animation Loop
@@ -434,8 +445,33 @@ function animate() {
   material.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uCenter.value.copy(material.uniforms.uCenter.value);
-  // Very slowly drift the swirl centre toward the pointer
-  flameMaterial.uniforms.uSwirlCenter.value.lerp(swirlCenterTarget, 0.006);
+
+  const swirlPos = flameMaterial.uniforms.uSwirlCenter.value;
+
+  if (!isArrived) {
+    // Decelerate as it closes in: lerp factor scales with distance so it glides to a halt
+    const dist = swirlPos.distanceTo(pointerRest);
+    const lerpFactor = Math.min(0.0008, 0.00012 * dist + 0.00004);
+    swirlPos.lerp(swirlCenterTarget, lerpFactor);
+
+    // Check if close enough to consider "arrived"
+    if (dist < 1.0) {
+      isArrived = true;
+      // Pick a new very slow, tight orbit when we arrive
+      orbitDir    = Math.random() < 0.5 ? 1 : -1;
+      orbitRadius = 1.5 + Math.random() * 2.5;
+      orbitSpeed  = 0.0004 + Math.random() * 0.0004;
+      orbitAngle  = Math.atan2(swirlPos.y - pointerRest.y, swirlPos.x - pointerRest.x);
+    }
+  } else {
+    // Idle: very slowly orbit around the pointer rest position
+    orbitAngle += orbitDir * orbitSpeed;
+    swirlPos.set(
+      pointerRest.x + Math.cos(orbitAngle) * orbitRadius,
+      pointerRest.y + Math.sin(orbitAngle) * orbitRadius,
+      0
+    );
+  }
   
   material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
   material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
@@ -459,7 +495,7 @@ window.addEventListener('resize', () => {
 const overlay = document.createElement('div');
 overlay.className = 'overlay';
 overlay.innerHTML = `
-  <h1>String Theory</h1>
+  <h1>Swirl Theory</h1>
   <p>vibrating<br />in<br />hidden<br />dimensions</p>
 `;
 document.body.appendChild(overlay);
