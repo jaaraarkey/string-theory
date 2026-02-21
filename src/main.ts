@@ -9,17 +9,23 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0.015);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 100; // Zoomed out significantly
+camera.position.z = 75; // Slightly zoomed in
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for performance
+
+// Adaptive pixel ratio: cap lower on weak devices (low CPU count = likely mobile/low-end)
+const isLowEnd = navigator.hardwareConcurrency <= 4;
+const isMidRange = navigator.hardwareConcurrency <= 8;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowEnd ? 1 : isMidRange ? 1.5 : 2));
 document.getElementById('app')?.appendChild(renderer.domElement);
 
 // Post-Processing (Bloom for the Ethereal Glow)
 const renderScene = new RenderPass(scene, camera);
+// Bloom rendered at half resolution — huge saving on its 5 internal passes, barely visible difference
+const bloomRes = new THREE.Vector2(Math.round(window.innerWidth * 0.5), Math.round(window.innerHeight * 0.5));
 const bloomPass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  bloomRes,
   2.5,  // strength
   0.5,  // radius
   0.1   // threshold
@@ -30,38 +36,35 @@ composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
 // String Theory Geometry setup - Converting to Dotted Lines / Particles
-const STRINGS_COUNT = 400; // Dense enough to show shapes, sparse enough to breathe
-const POINTS_PER_STRING = 60; // How many dots per string curve
-const TOTAL_VERTICES = STRINGS_COUNT * POINTS_PER_STRING;
+// Tiered geometry density based on device capability
+const STRINGS_COUNT      = isLowEnd ? 350 : isMidRange ? 520 : 700;
+const POINTS_PER_STRING  = isLowEnd ? 50  : isMidRange ? 65  : 80;
+const SEGS_PER_STRING = POINTS_PER_STRING - 1; // segments between consecutive points
+const TOTAL_VERTICES = STRINGS_COUNT * SEGS_PER_STRING * 2; // 2 verts per segment
 
-const positions = new Float32Array(TOTAL_VERTICES * 3);
 const uvs = new Float32Array(TOTAL_VERTICES * 2);
 const randoms = new Float32Array(TOTAL_VERTICES * 3);
 
-let vertexIndex = 0;
-
 for (let i = 0; i < STRINGS_COUNT; i++) {
-  // Random properties for this specific string curve
   const rX = Math.random();
   const rY = Math.random();
   const rZ = Math.random();
 
-  for (let j = 0; j < POINTS_PER_STRING; j++) {
-    const tAlong = j / (POINTS_PER_STRING - 1);
-    
-    uvs[vertexIndex * 2 + 0] = tAlong;
-    uvs[vertexIndex * 2 + 1] = i; // String ID mapping
-    
-    randoms[vertexIndex * 3 + 0] = rX;
-    randoms[vertexIndex * 3 + 1] = rY;
-    randoms[vertexIndex * 3 + 2] = rZ;
-    
-    vertexIndex++;
+  for (let j = 0; j < SEGS_PER_STRING; j++) {
+    const tA = j / (POINTS_PER_STRING - 1);
+    const tB = (j + 1) / (POINTS_PER_STRING - 1);
+    const base = (i * SEGS_PER_STRING + j) * 2;
+    // Vertex A
+    uvs[base * 2 + 0] = tA; uvs[base * 2 + 1] = i;
+    randoms[base * 3 + 0] = rX; randoms[base * 3 + 1] = rY; randoms[base * 3 + 2] = rZ;
+    // Vertex B
+    uvs[(base+1) * 2 + 0] = tB; uvs[(base+1) * 2 + 1] = i;
+    randoms[(base+1) * 3 + 0] = rX; randoms[(base+1) * 3 + 1] = rY; randoms[(base+1) * 3 + 2] = rZ;
   }
 }
 
 const geometry = new THREE.BufferGeometry();
-geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TOTAL_VERTICES * 3), 3));
 geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
 
@@ -69,6 +72,7 @@ geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
 const vertexShader = `
   uniform float uTime;
   uniform vec3 uMouse;
+  uniform vec3 uCenter;
   attribute vec3 aRandom;
   
   varying vec3 vColor;
@@ -78,44 +82,59 @@ const vertexShader = `
     float tAlong = uv.x; // 0.0 to 1.0 along the string curve
     float stringId = uv.y;
     
-    // EVEN SLOWER: uTime multiplier from 0.05 to 0.015
-    float flowTime = uTime * 0.015; 
+    // Flow time — faster for more visible evolution
+    float flowTime  = uTime * 0.04;
+    float flowTime2 = uTime * 0.017; // second independent slow layer
     
-    // 1. Macro Origin - where does this string live?
-    float radius = 25.0 + aRandom.z * 20.0;
-    float theta = aRandom.x * 6.2831;
-    float phi = acos(aRandom.y * 2.0 - 1.0);
-    
-    vec3 origin = vec3(
-      sin(phi) * cos(theta),
-      sin(phi) * sin(theta),
-      cos(phi)
-    ) * radius;
-    
-    // Make the origin drift slowly (EVEN SLOWER multipliters)
-    origin.x += sin(flowTime + aRandom.y * 10.0) * 10.0;
-    origin.y += cos(flowTime * 1.2 + aRandom.z * 10.0) * 10.0;
-    origin.z += sin(flowTime * 0.8 + aRandom.x * 10.0) * 10.0;
+    // 1. Macro Origin - horn torus (sphere-like)
+    float R = 14.0;
+    float tubeR = 22.0;
 
-    // 2. Macro Path - the general wavy curve of the string
-    float length = 20.0 + aRandom.x * 15.0;
-    float localT = tAlong - 0.5; // -0.5 to 0.5
-    
-    // EVEN SLOWER wave speeds
-    vec3 path = vec3(
-      sin(origin.y * 0.1 + localT * 3.0 + flowTime * 2.0) * length,
-      cos(origin.x * 0.1 + localT * 2.5 - flowTime * 1.5) * length,
-      sin(origin.z * 0.1 - localT * 3.5 + flowTime * 2.5) * length
+    float theta = aRandom.x * 6.2831;
+    float phi   = aRandom.y * 6.2831;
+
+    float rawOffset = aRandom.z * 2.0 - 1.0;
+    float shellBias = sign(rawOffset) * pow(abs(rawOffset), 2.0);
+    float r = tubeR + shellBias * tubeR * 0.35;
+
+    vec3 origin = vec3(
+      (R + r * cos(phi)) * cos(theta),
+      r * sin(phi),
+      (R + r * cos(phi)) * sin(theta)
     );
+
+    // Shape-level breathing: slow large-scale deformation morphs the sphere over time
+    float breathe = sin(flowTime2 * 0.7 + aRandom.x * 4.0) * 3.5
+                  + sin(flowTime2 * 1.1 + aRandom.y * 3.0) * 2.0;
+    origin += normalize(origin) * breathe;
+
+    // Drift: two-frequency for richer organic motion
+    float driftAmp = 2.2;
+    origin.x += sin(flowTime + aRandom.y * 10.0) * driftAmp
+              + sin(flowTime2 * 1.3 + aRandom.z * 7.0) * 1.0;
+    origin.y += cos(flowTime * 1.2 + aRandom.z * 10.0) * driftAmp
+              + cos(flowTime2 * 0.9 + aRandom.x * 7.0) * 1.0;
+    origin.z += sin(flowTime * 0.8 + aRandom.x * 10.0) * driftAmp
+              + sin(flowTime2 * 1.5 + aRandom.y * 7.0) * 1.0;
+
+    // 2. Macro Path — two overlapping wave layers for fluid, evolving lines
+    float length = 6.0 + aRandom.x * 5.0;
+    float localT = tAlong - 0.5;
+
+    vec3 thetaTangent = vec3(-sin(theta), 0.0, cos(theta));
+    vec3 phiTangent   = vec3(-sin(phi)*cos(theta), cos(phi), -sin(phi)*sin(theta));
+
+    float wave1 = sin(localT * 3.5 + flowTime  * 2.5 + aRandom.z * 6.28) * length;
+    float wave2 = sin(localT * 2.1 + flowTime2 * 3.0 + aRandom.x * 6.28) * length * 0.45;
+    float wave  = wave1 + wave2;
+    vec3 path = thetaTangent * wave * 0.6 + phiTangent * wave;
     
     // Convert to world pos without rotation
     vec3 basePos = origin + path;
 
-    // Apply rotation mathematically here to sync with the scene.rotation in JS
-    // Complex, extremely slow tumble around all 3 axes
-    float rotX = uTime * 0.007 + sin(uTime * 0.002) * 0.5;
-    float rotY = uTime * 0.005 + cos(uTime * 0.003) * 0.5;
-    float rotZ = uTime * 0.009;
+    // Rotation: X fixed at 90° — donut lies flat, no wobble
+    float rotX = 1.5708;
+    float rotY = uTime * 0.006 + cos(uTime * 0.002) * 0.3;
     
     // Basic X rotation matrix
     mat3 rotMatX = mat3(
@@ -129,20 +148,15 @@ const vertexShader = `
       0.0, 1.0, 0.0,
       -sin(rotY), 0.0, cos(rotY)
     );
-    // Basic Z rotation matrix
-    mat3 rotMatZ = mat3(
-      cos(rotZ), -sin(rotZ), 0.0,
-      sin(rotZ), cos(rotZ), 0.0,
-      0.0, 0.0, 1.0
-    );
     
-    // Apply all three rotations (Z * Y * X matrix multiplication order)
-    vec3 rotatedPos = rotMatZ * rotMatY * rotMatX * basePos;
-    vec3 finalPos = rotatedPos;
+    // Apply X and Y rotations only (no Z roll)
+    vec3 rotatedPos = rotMatY * rotMatX * basePos;
+    // Shift the entire structure very slowly toward the pointer
+    vec3 finalPos = rotatedPos + uCenter;
 
-    // 3. Quantum Vibrations - the high frequency jitter
+    // 3. Quantum Vibrations - subtle jitter kept small to preserve hole clarity
     float microFreq = 15.0 + aRandom.y * 10.0;
-    float microAmp = 0.5 + aRandom.z * 1.5;
+    float microAmp = 0.15 + aRandom.z * 0.25;
     
     // EVEN SLOWER jitter speed
     vec3 microOffset = vec3(
@@ -151,8 +165,8 @@ const vertexShader = `
       sin(tAlong * microFreq * 0.9 + uTime * 1.2 + aRandom.z * 6.28)
     ) * microAmp;
     
-    // Taper the vibrations at the very ends of the string
-    float taper = sin(tAlong * 3.14159);
+    // Taper: pow(3) makes tips very transparent, softening the visible donut edges
+    float taper = pow(sin(tAlong * 3.14159), 3.0);
     finalPos += microOffset * taper;
 
     // 4. Interactive Pointer / Mouse Gravity and Swirl
@@ -168,17 +182,14 @@ const vertexShader = `
     vec3 swirlAxis = normalize(vec3(sin(uTime * 0.2), cos(uTime * 0.2), 1.0));
     vec3 swirlForce = cross(toMouse, swirlAxis);
     
-    // Apply pull and swirl
-    finalPos += toMouse * interactionForce * 15.0 * aRandom.x; // Pull them densely towards the center
-    finalPos += swirlForce * interactionForce * 20.0; // Swirl them around the mouse
-    finalPos += microOffset * interactionForce * 5.0; // Add extra jitter chaos in the vortex
+    // Apply pull and swirl — gentler pull so the hole stays open
+    finalPos += toMouse * interactionForce * 6.0 * aRandom.x; // Pull toward mouse
+    finalPos += swirlForce * interactionForce * 10.0; // Swirl around the mouse
+    finalPos += microOffset * interactionForce * 2.0; // Subtle chaos in the vortex
 
     // Projection
-    vec4 mvPosition = viewMatrix * vec4(finalPos, 1.0); // We ignore modelMatrix intentionally since we do rotation in shader now to coordinate with uMouse
+    vec4 mvPosition = viewMatrix * vec4(finalPos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
-    
-    // BIGGER PARTICLES: Increased base size multiplier from 40.0 to 100.0
-    gl_PointSize = (100.0 / -mvPosition.z) * (0.5 + taper * 1.5 + interactionForce * 5.0);
 
     // ---- PALETTE (dimmed ~50% of true vibrancy for atmospheric glow) ----
     // Neon Pink         #f72585 -> rgb(247, 37, 133)   dimmed
@@ -192,8 +203,8 @@ const vertexShader = `
     // Sky Aqua          #4cc9f0 -> rgb( 76,201, 240)   dimmed
     vec3 palSkyAqua        = vec3(0.149, 0.395, 0.471);
 
-    // Cycle smoothly through all 5 colors along each string
-    float cycle = mod(stringId * 0.037 + tAlong * 2.0 + flowTime * 0.8, 5.0);
+    // Cycle faster so colours visibly evolve across the sphere
+    float cycle = mod(stringId * 0.037 + tAlong * 2.5 + flowTime * 3.0, 5.0);
     
     vec3 palColor;
     if (cycle < 1.0) {
@@ -227,7 +238,7 @@ const vertexShader = `
     
     vColor = mix(baseColor, activeColor, interactionForce * 1.2);
     
-    float flash = sin(stringId * 0.05 + uTime * 0.8) * 0.5 + 0.5;
+    float flash = sin(stringId * 0.05 + uTime * 1.8) * 0.5 + 0.5;
     float depthFade = smoothstep(50.0, -80.0, mvPosition.z);
     
     // Glow brighter when in the vortex
@@ -240,24 +251,7 @@ const fragmentShader = `
   varying float vOpacity;
 
   void main() {
-    // Make the point circular instead of square
-    vec2 cxy = 2.0 * gl_PointCoord - 1.0;
-    float r = dot(cxy, cxy);
-    if (r > 1.0) {
-      discard; // Mask out the corners
-    }
-    
-    // Create a very smooth, gradual radial gradient for the glow
-    // exp(-r * factor) produces a lovely Gaussian falloff (much softer than pow)
-    float softGlow = exp(-r * 3.0); 
-    
-    // The core is slightly brighter, the edges fade out gracefully into the background
-    float alpha = softGlow * vOpacity;
-    
-    // We also push the color intensity slightly up in the very center
-    vec3 glowColor = vColor * (1.0 + softGlow * 0.5);
-    
-    gl_FragColor = vec4(glowColor, alpha);
+    gl_FragColor = vec4(vColor, vOpacity);
   }
 `;
 
@@ -266,32 +260,168 @@ const material = new THREE.ShaderMaterial({
   fragmentShader,
   uniforms: {
     uTime: { value: 0 },
-    uMouse: { value: new THREE.Vector3(0, 0, -200) } // Default off-camera
+    uMouse: { value: new THREE.Vector3(0, 0, -200) }, // Default off-camera
+    uCenter: { value: new THREE.Vector3(0, 0, 0) }   // Very slow drift toward pointer
   },
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
 });
 
-// Using Points instead of LineSegments creates the "dotted" effect
-const points = new THREE.Points(geometry, material);
-// We disabled scene rotation in JS because we moved it into the shader to keep mouse coordinates accurate
-scene.add(points);
+// LineSegments gives continuous flame-like lines along the torus surface
+const points = new THREE.LineSegments(geometry, material);
+// Sphere removed — swirl only
+// scene.add(points);
+
+// ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
+// Logarithmic spiral arms that revolve very slowly from the screen edges inward.
+const SWIRL_ARMS    = 180;  // number of spiral arms (dense for a galaxy feel)
+const SWIRL_PTS     = 100;  // points per arm
+const SWIRL_SEGS    = SWIRL_PTS - 1;
+const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
+
+const swirlUvs   = new Float32Array(SWIRL_TOTAL * 2);
+const swirlRands = new Float32Array(SWIRL_TOTAL * 3); // r0: arm offset angle, r1: radius jitter, r2: opacity seed
+
+for (let i = 0; i < SWIRL_ARMS; i++) {
+  const r0 = i / SWIRL_ARMS;          // evenly distributed start angle (0–1)
+  const r1 = Math.random();            // radius spread
+  const r2 = Math.random();            // shimmer seed
+  for (let j = 0; j < SWIRL_SEGS; j++) {
+    const base = (i * SWIRL_SEGS + j) * 2;
+    const tA = j / (SWIRL_PTS - 1);
+    const tB = (j + 1) / (SWIRL_PTS - 1);
+    swirlUvs[base * 2 + 0] = tA;  swirlUvs[base * 2 + 1] = i;
+    swirlRands[base * 3 + 0] = r0; swirlRands[base * 3 + 1] = r1; swirlRands[base * 3 + 2] = r2;
+    swirlUvs[(base+1) * 2 + 0] = tB;  swirlUvs[(base+1) * 2 + 1] = i;
+    swirlRands[(base+1) * 3 + 0] = r0; swirlRands[(base+1) * 3 + 1] = r1; swirlRands[(base+1) * 3 + 2] = r2;
+  }
+}
+
+const flameGeo = new THREE.BufferGeometry();
+flameGeo.setAttribute('uv',      new THREE.BufferAttribute(swirlUvs,   2));
+flameGeo.setAttribute('aRandom', new THREE.BufferAttribute(swirlRands, 3));
+flameGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SWIRL_TOTAL * 3), 3));
+
+const flameVertexShader = `
+  uniform float uTime;
+  uniform vec3  uCenter;
+  uniform vec3  uSwirlCenter;
+  attribute vec3 aRandom; // .x armAngle, .y radiusJitter, .z shimmerSeed
+
+  varying float vFlameOpacity;
+  varying float vT;
+
+  void main() {
+    float tAlong   = uv.x;   // 0 = outer edge, 1 = centre
+    float stringId = uv.y;
+
+    // t runs from 1 (outer) to 0 (inner) so radius shrinks as we go in
+    float t = 1.0 - tAlong;
+
+    // Very slow global revolution — one full turn every ~105 seconds
+    float revolution = uTime * 0.006;
+
+    // Each arm starts at its evenly-spaced angle + the slow revolution
+    float armAngle = aRandom.x * 6.2831 + revolution;
+
+    // Logarithmic spiral: angle increases as radius decreases inward
+    // spiralTurns controls how tightly wound the arms are (1.8 = ~1.8 extra turns edge→centre)
+    float spiralTurns = 1.8;
+    float angle = armAngle + t * spiralTurns * 6.2831;
+
+    // Outer radius: arms start well beyond screen, taper to ~sphere surface
+    float outerR = 72.0 + aRandom.y * 20.0;
+    float innerR = 4.0  + aRandom.y * 8.0;  // dissolve into the sphere
+    float radius  = mix(innerR, outerR, t);
+
+    // Position on spiral
+    vec2 spiralXY = vec2(cos(angle), sin(angle)) * radius;
+
+    // Add very gentle lateral wisp — smaller near centre so the core stays clean
+    float wispAmp = t * 3.5;
+    float wispFreq = 3.0 + aRandom.z * 2.0;
+    vec2 perp = vec2(-sin(angle), cos(angle)); // perpendicular to radial direction
+    float wisp = sin(tAlong * wispFreq * 6.28 + uTime * 0.8 + aRandom.z * 6.28) * wispAmp;
+
+    vec2 finalXY = spiralXY + perp * wisp + vec2(uSwirlCenter.x, uSwirlCenter.y);
+    float z = (aRandom.y - 0.5) * 12.0;
+
+    vec4 mvPosition = viewMatrix * vec4(vec3(finalXY, z), 1.0);
+    gl_Position     = projectionMatrix * mvPosition;
+
+    // Opacity: fades at outer edge, fades at inner core, shimmer along arm
+    float edgeFade  = smoothstep(0.0, 0.18, tAlong);          // fade in from outer edge
+    float coreFade  = smoothstep(0.0, 0.12, t);               // fade out into core
+    float shimmer   = 0.55 + 0.45 * sin(tAlong * 10.0 + uTime * 1.2 + aRandom.z * 6.28);
+    vFlameOpacity   = edgeFade * coreFade * shimmer * 0.22;
+    vT = tAlong;
+  }
+`;
+
+const flameFragmentShader = `
+  varying float vFlameOpacity;
+  varying float vT;
+
+  void main() {
+    // Outer edges: deep indigo/violet → mid: soft lavender-silver → core: ice white
+    vec3 colOuter  = vec3(0.12, 0.08, 0.28);   // deep violet
+    vec3 colMid    = vec3(0.55, 0.58, 0.80);   // lavender silver
+    vec3 colInner  = vec3(0.90, 0.93, 1.00);   // ice white
+
+    vec3 col;
+    if (vT < 0.5) {
+      col = mix(colOuter, colMid,   vT * 2.0);
+    } else {
+      col = mix(colMid,   colInner, (vT - 0.5) * 2.0);
+    }
+
+    gl_FragColor = vec4(col, vFlameOpacity);
+  }
+`;
+
+const flameMaterial = new THREE.ShaderMaterial({
+  vertexShader:   flameVertexShader,
+  fragmentShader: flameFragmentShader,
+  uniforms: {
+    uTime:        { value: 0 },
+    uCenter:      { value: new THREE.Vector3(0, 0, 0) },
+    uSwirlCenter: { value: new THREE.Vector3(0, 0, 0) }, // slow drift toward pointer
+  },
+  transparent: true,
+  depthWrite:  false,
+  blending:    THREE.AdditiveBlending,
+});
+
+const flamePoints = new THREE.LineSegments(flameGeo, flameMaterial);
+scene.add(flamePoints);
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Mouse Interaction Setup
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(-999, -999);
 const targetMouse = new THREE.Vector3(0, 0, 0);
-// Create an invisible plane at Z=0 to test mouse intersection against
+// Center drift target for the sphere (kept for uniforms, sphere hidden)
+const centerTarget = new THREE.Vector3(0, 0, 0);
+// Swirl centre target — follows pointer slowly across the full screen
+const swirlCenterTarget = new THREE.Vector3(0, 0, 0);
 const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
 window.addEventListener('pointermove', (event) => {
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
   
-  // Calculate where the mouse pointer hits the invisible 3D plane
   raycaster.setFromCamera(pointer, camera);
   raycaster.ray.intersectPlane(mousePlane, targetMouse);
+
+  centerTarget.set(
+    Math.max(-8, Math.min(8, targetMouse.x * 0.12)),
+    Math.max(-8, Math.min(8, targetMouse.y * 0.12)),
+    0
+  );
+
+  // Swirl centre follows the pointer directly — no clamp so it travels anywhere on screen
+  swirlCenterTarget.set(targetMouse.x, targetMouse.y, 0);
 });
 
 // Animation Loop
@@ -302,9 +432,13 @@ function animate() {
   
   const elapsedTime = clock.getElapsedTime();
   material.uniforms.uTime.value = elapsedTime;
+  flameMaterial.uniforms.uTime.value = elapsedTime;
+  flameMaterial.uniforms.uCenter.value.copy(material.uniforms.uCenter.value);
+  // Very slowly drift the swirl centre toward the pointer
+  flameMaterial.uniforms.uSwirlCenter.value.lerp(swirlCenterTarget, 0.006);
   
-  // Smoothly lerp the shader uniform to the actual mouse hit point
   material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
+  material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
 
   // Render via composer for Bloom
   composer.render();
@@ -318,6 +452,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
+  bloomPass.resolution.set(Math.round(window.innerWidth * 0.5), Math.round(window.innerHeight * 0.5));
 });
 
 // Update DOM to add a cool overlay title
