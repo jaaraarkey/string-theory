@@ -307,67 +307,99 @@ const flameVertexShader = `
   uniform float uTime;
   uniform vec3  uCenter;
   uniform vec3  uSwirlCenter;
-  attribute vec3 aRandom; // .x armAngle, .y radiusJitter, .z shimmerSeed
+  uniform vec3  uRippleOrigin;  // 3D world position of click
+  uniform float uRippleTime;    // seconds since last click (-1 = inactive)
+  attribute vec3 aRandom;
 
   varying float vFlameOpacity;
   varying float vT;
+  varying float vRippleInfluence;
+  varying float vRippleAge;
 
   void main() {
-    float tAlong   = uv.x;   // 0 = outer edge, 1 = centre
-    float stringId = uv.y;
-
-    // t runs from 1 (outer) to 0 (inner) so radius shrinks as we go in
     float t = 1.0 - tAlong;
 
-    // Very slow global revolution — one full turn every ~105 seconds
     float revolution = uTime * 0.006;
-
-    // Each arm starts at its evenly-spaced angle + the slow revolution
     float armAngle = aRandom.x * 6.2831 + revolution;
-
-    // Logarithmic spiral: angle increases as radius decreases inward
-    // spiralTurns controls how tightly wound the arms are (1.8 = ~1.8 extra turns edge→centre)
     float spiralTurns = 1.8;
     float angle = armAngle + t * spiralTurns * 6.2831;
 
-    // Outer radius: arms start well beyond screen, taper to ~sphere surface
     float outerR = 72.0 + aRandom.y * 20.0;
-    float innerR = 4.0  + aRandom.y * 8.0;  // dissolve into the sphere
+    float innerR = 4.0  + aRandom.y * 8.0;
     float radius  = mix(innerR, outerR, t);
 
-    // Position on spiral
     vec2 spiralXY = vec2(cos(angle), sin(angle)) * radius;
 
-    // Add very gentle lateral wisp — smaller near centre so the core stays clean
     float wispAmp = t * 3.5;
     float wispFreq = 3.0 + aRandom.z * 2.0;
-    vec2 perp = vec2(-sin(angle), cos(angle)); // perpendicular to radial direction
+    vec2 perp = vec2(-sin(angle), cos(angle));
     float wisp = sin(tAlong * wispFreq * 6.28 + uTime * 0.8 + aRandom.z * 6.28) * wispAmp;
 
     vec2 finalXY = spiralXY + perp * wisp + vec2(uSwirlCenter.x, uSwirlCenter.y);
     float z = (aRandom.y - 0.5) * 12.0;
 
+    // ── Ripple displacement ──
+    if (uRippleTime >= 0.0) {
+      float rippleDuration = 2.2;   // seconds the ring expands
+      float rippleSpeed    = 55.0;  // world units per second
+      float rippleWidth    = 8.0;   // ring thickness
+      float rippleAge      = uRippleTime;
+
+      vec2 toVertex = finalXY - vec2(uRippleOrigin.x, uRippleOrigin.y);
+      float dist = length(toVertex);
+      float waveFront = rippleAge * rippleSpeed;  // expanding ring radius
+
+      // Signed distance from the wave ring
+      float delta = dist - waveFront;
+      // Smooth Gaussian bell centred on the ring
+      float rippleShape = exp(-delta * delta / (rippleWidth * rippleWidth));
+      // Fade the ring out as it ages
+      float rippleFade  = 1.0 - smoothstep(0.0, rippleDuration, rippleAge);
+      float rippleAmp   = rippleShape * rippleFade * 12.0;
+
+      // Push outward from click centre
+      vec2 outDir = dist > 0.001 ? normalize(toVertex) : vec2(1.0, 0.0);
+      finalXY += outDir * rippleAmp;
+    }
+
     vec4 mvPosition = viewMatrix * vec4(vec3(finalXY, z), 1.0);
     gl_Position     = projectionMatrix * mvPosition;
 
-    // Opacity: fades at outer edge, fades at inner core, shimmer along arm
-    float edgeFade  = smoothstep(0.0, 0.18, tAlong);          // fade in from outer edge
-    float coreFade  = smoothstep(0.0, 0.12, t);               // fade out into core
+    float edgeFade  = smoothstep(0.0, 0.18, tAlong);
+    float coreFade  = smoothstep(0.0, 0.12, t);
     float shimmer   = 0.55 + 0.45 * sin(tAlong * 10.0 + uTime * 1.2 + aRandom.z * 6.28);
     vFlameOpacity   = edgeFade * coreFade * shimmer * 0.22;
     vT = tAlong;
+
+    // Ripple colour influence — peaks right on the wave ring, fades out
+    if (uRippleTime >= 0.0) {
+      float rippleDuration = 2.2;
+      float rippleSpeed    = 55.0;
+      float rippleWidth    = 8.0;
+      vec2  toV2  = finalXY - vec2(uRippleOrigin.x, uRippleOrigin.y);
+      float dist2 = length(toV2);
+      float delta2 = dist2 - uRippleTime * rippleSpeed;
+      vRippleInfluence = exp(-delta2 * delta2 / (rippleWidth * rippleWidth))
+                       * (1.0 - smoothstep(0.0, rippleDuration, uRippleTime));
+      vRippleAge = uRippleTime / rippleDuration;
+    } else {
+      vRippleInfluence = 0.0;
+      vRippleAge       = 0.0;
+    }
   }
 `;
 
 const flameFragmentShader = `
   varying float vFlameOpacity;
   varying float vT;
+  varying float vRippleInfluence;
+  varying float vRippleAge;
 
   void main() {
-    // Outer edges: deep indigo/violet → mid: soft lavender-silver → core: ice white
-    vec3 colOuter  = vec3(0.12, 0.08, 0.28);   // deep violet
-    vec3 colMid    = vec3(0.55, 0.58, 0.80);   // lavender silver
-    vec3 colInner  = vec3(0.90, 0.93, 1.00);   // ice white
+    // Base palette: deep violet → lavender silver → ice white
+    vec3 colOuter  = vec3(0.12, 0.08, 0.28);
+    vec3 colMid    = vec3(0.55, 0.58, 0.80);
+    vec3 colInner  = vec3(0.90, 0.93, 1.00);
 
     vec3 col;
     if (vT < 0.5) {
@@ -375,6 +407,19 @@ const flameFragmentShader = `
     } else {
       col = mix(colMid,   colInner, (vT - 0.5) * 2.0);
     }
+
+    // Ripple gradient: young ring = hot white-cyan, ages into gold-pink then fades
+    vec3 rippleYoung = vec3(0.85, 1.00, 1.00);  // bright cyan-white
+    vec3 rippleMid   = vec3(1.00, 0.80, 0.20);  // gold
+    vec3 rippleOld   = vec3(0.80, 0.20, 0.50);  // deep pink
+    vec3 rippleCol;
+    if (vRippleAge < 0.4) {
+      rippleCol = mix(rippleYoung, rippleMid, vRippleAge / 0.4);
+    } else {
+      rippleCol = mix(rippleMid,   rippleOld,  (vRippleAge - 0.4) / 0.6);
+    }
+
+    col = mix(col, rippleCol, vRippleInfluence);
 
     gl_FragColor = vec4(col, vFlameOpacity);
   }
@@ -384,9 +429,11 @@ const flameMaterial = new THREE.ShaderMaterial({
   vertexShader:   flameVertexShader,
   fragmentShader: flameFragmentShader,
   uniforms: {
-    uTime:        { value: 0 },
-    uCenter:      { value: new THREE.Vector3(0, 0, 0) },
-    uSwirlCenter: { value: new THREE.Vector3(0, 0, 0) }, // slow drift toward pointer
+    uTime:         { value: 0 },
+    uCenter:       { value: new THREE.Vector3(0, 0, 0) },
+    uSwirlCenter:  { value: new THREE.Vector3(0, 0, 0) },
+    uRippleOrigin: { value: new THREE.Vector3(0, 0, 0) },
+    uRippleTime:   { value: -1.0 }, // -1 = no active ripple
   },
   transparent: true,
   depthWrite:  false,
@@ -435,6 +482,23 @@ window.addEventListener('pointermove', (event) => {
   isArrived = false;
 });
 
+// Ripple state
+let rippleStartTime = -1; // elapsed time when last click happened
+const RIPPLE_DURATION = 2.2;
+
+window.addEventListener('pointerdown', (event) => {
+  // Convert click to 3D world position on the Z=0 plane
+  const clickPointer = new THREE.Vector2(
+    (event.clientX / window.innerWidth) * 2 - 1,
+    -(event.clientY / window.innerHeight) * 2 + 1
+  );
+  const clickTarget = new THREE.Vector3();
+  raycaster.setFromCamera(clickPointer, camera);
+  raycaster.ray.intersectPlane(mousePlane, clickTarget);
+  flameMaterial.uniforms.uRippleOrigin.value.copy(clickTarget);
+  rippleStartTime = clock.getElapsedTime();
+});
+
 // Animation Loop
 const clock = new THREE.Clock();
 
@@ -445,6 +509,13 @@ function animate() {
   material.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uCenter.value.copy(material.uniforms.uCenter.value);
+
+  // Update ripple age; deactivate once it has fully expanded
+  if (rippleStartTime >= 0) {
+    const age = elapsedTime - rippleStartTime;
+    flameMaterial.uniforms.uRippleTime.value = age < RIPPLE_DURATION ? age : -1.0;
+    if (age >= RIPPLE_DURATION) rippleStartTime = -1;
+  }
 
   const swirlPos = flameMaterial.uniforms.uSwirlCenter.value;
 
