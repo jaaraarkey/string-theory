@@ -325,6 +325,6 @@ const overlay = document.createElement('div');
 overlay.className = 'overlay';
 overlay.innerHTML = `
   <h1>String Theory</h1>
-  <p>Vibrating in hidden dimensions</p>
+  <p>vibrating<br />in<br />hidden<br />dimensions</p>
 `;
 document.body.appendChild(overlay);
