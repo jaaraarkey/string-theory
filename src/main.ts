@@ -409,16 +409,18 @@ const flameFragmentShader = `
       col = mix(colMid,   colInner, (vT - 0.5) * 2.0);
     }
 
-    // Ripple gradient: young ring = hot white-cyan, ages into gold-pink then fades
-    vec3 rippleYoung = vec3(0.85, 1.00, 1.00);  // bright cyan-white
-    vec3 rippleMid   = vec3(1.00, 0.80, 0.20);  // gold
-    vec3 rippleOld   = vec3(0.80, 0.20, 0.50);  // deep pink
+    // Ripple gradient: sphere palette — Neon Pink → Indigo → Royal → Sapphire → Sky Aqua
+    vec3 rp0 = vec3(0.969, 0.145, 0.522);  // Neon Pink      (full brightness)
+    vec3 rp1 = vec3(0.447, 0.035, 0.718);  // Indigo Bloom
+    vec3 rp2 = vec3(0.227, 0.047, 0.639);  // Vivid Royal
+    vec3 rp3 = vec3(0.263, 0.380, 0.933);  // Electric Sapphire
+    vec3 rp4 = vec3(0.298, 0.789, 0.941);  // Sky Aqua       (full brightness)
+    float ra = vRippleAge * 4.0;            // map 0–1 → 0–4 across 4 transitions
     vec3 rippleCol;
-    if (vRippleAge < 0.4) {
-      rippleCol = mix(rippleYoung, rippleMid, vRippleAge / 0.4);
-    } else {
-      rippleCol = mix(rippleMid,   rippleOld,  (vRippleAge - 0.4) / 0.6);
-    }
+    if (ra < 1.0)      rippleCol = mix(rp0, rp1, ra);
+    else if (ra < 2.0) rippleCol = mix(rp1, rp2, ra - 1.0);
+    else if (ra < 3.0) rippleCol = mix(rp2, rp3, ra - 2.0);
+    else               rippleCol = mix(rp3, rp4, ra - 3.0);
 
     col = mix(col, rippleCol, vRippleInfluence);
 
