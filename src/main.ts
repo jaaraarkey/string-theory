@@ -213,6 +213,11 @@ const vertexShader = `
     // Slightly brighten the midpoints of each string (taper effect)
     baseColor = mix(baseColor * 0.5, baseColor, taper);
     
+    // White-silver stellar highlights: rare bright flashes along the string
+    vec3 whiteSilver = vec3(0.85, 0.88, 0.95); // Slightly cool silver-white
+    float silverHighlight = pow(max(0.0, cos(stringId * 13.0 + tAlong * 20.0 + flowTime * 0.5)), 12.0);
+    baseColor = mix(baseColor, whiteSilver, silverHighlight * 0.75);
+    
     // Mouse vortex: flash full-brightness Neon Pink & Sky Aqua
     vec3 swirlColorA = vec3(0.969, 0.145, 0.522);  // Full-brightness Neon Pink
     vec3 swirlColorB = vec3(0.298, 0.789, 0.941);  // Full-brightness Sky Aqua
