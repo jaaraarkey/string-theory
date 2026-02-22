@@ -27,7 +27,7 @@ const bloomRes = new THREE.Vector2(Math.round(window.innerWidth * 0.5), Math.rou
 const bloomPass = new UnrealBloomPass(
   bloomRes,
   2.5,  // strength
-  0.5,  // radius
+  0.9,  // radius
   0.1   // threshold
 );
 
@@ -453,10 +453,24 @@ const pointer = new THREE.Vector2(-999, -999);
 const targetMouse = new THREE.Vector3(0, 0, 0);
 // Center drift target for the sphere (kept for uniforms, sphere hidden)
 const centerTarget = new THREE.Vector3(0, 0, 0);
-// Swirl centre target — follows pointer slowly across the full screen
+// Raw pointer goal — updated instantly on pointermove
+const pointerGoal = new THREE.Vector3(0, 0, 0);
+// Swirl centre target lerps toward pointerGoal each frame (never snaps)
 const swirlCenterTarget = new THREE.Vector3(0, 0, 0);
 // The resting pointer position (where the pointer last stopped)
 const pointerRest = new THREE.Vector3(0, 0, 0);
+// How far below the pointer the swirl center sits (world units)
+const SWIRL_Y_OFFSET = -12;
+
+// Scroll-driven Y lift: wheel events push the swirl upward like it's attached to the page
+let scrollWorldY = 0;
+let scrollVelY   = 0;
+
+// Two-stage lerp for buttery movement:
+// swirlSmooth slowly chases swirlCenterTarget, swirlPos slowly chases swirlSmooth
+const swirlSmooth = new THREE.Vector3(0, 0, 0);
+const LERP_STAGE1 = 0.004; // how fast the intermediate target moves
+const LERP_STAGE2 = 0.006; // how fast the actual position catches up
 const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
 // Idle orbit state — kicks in once the swirl centre has reached the pointer
@@ -494,8 +508,15 @@ function startSink() {
   const landX = (Math.random() * 2 - 1) * halfW * 0.6;
   swirlCenterTarget.set(landX, bottomWorldY, 0);
   // Random slow drift direction once landed
-  driftVelX = (Math.random() * 0.015 + 0.005) * (Math.random() < 0.5 ? 1 : -1);
+  driftVelX = (Math.random() * 0.004 + 0.001) * (Math.random() < 0.5 ? 1 : -1);
 }
+
+window.addEventListener('wheel', (event) => {
+  // Convert pixel delta to world units — scale so one page-worth feels natural
+  const halfH = Math.tan((60 * Math.PI / 180) / 2) * 45;
+  const worldPerPx = (halfH * 2) / window.innerHeight;
+  scrollVelY -= event.deltaY * worldPerPx * 0.15;  // negative deltaY = scroll up = swirl goes up
+}, { passive: true });
 
 window.addEventListener('pointermove', (event) => {
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -510,9 +531,9 @@ window.addEventListener('pointermove', (event) => {
     0
   );
 
-  // Update resting position and reset arrived state so swirl chases the new position
-  pointerRest.set(targetMouse.x, targetMouse.y, 0);
-  swirlCenterTarget.copy(pointerRest);
+  // Update raw goal — swirl will glide toward this over time
+  pointerGoal.set(targetMouse.x, targetMouse.y + SWIRL_Y_OFFSET, 0);
+  pointerRest.copy(pointerGoal);
   isArrived  = false;
   isSinking  = false;
   isResting  = false;
@@ -558,52 +579,58 @@ function animate() {
 
   const swirlPos = flameMaterial.uniforms.uSwirlCenter.value;
 
-  // Check if pointer has been idle long enough to start sinking
+  // Scroll inertia
+  scrollVelY   *= 0.90;
+  scrollWorldY += scrollVelY;
+  scrollWorldY *= 0.988;
+
+  // Smoothly glide swirlCenterTarget toward the pointer goal (only when following)
+  if (!isSinking && !isResting) {
+    swirlCenterTarget.lerp(pointerGoal, 0.03);
+  }
+
+  // Idle timeout — start sinking
   if (!isSinking && !isResting && Date.now() - lastMoveTime > IDLE_TIMEOUT) {
     startSink();
   }
 
-  if (isResting) {
-    // Drift slowly left/right along the below-screen strip
-    swirlPos.x += driftVelX;
-    // Gently bounce within a wide horizontal band
-    const halfW = (window.innerWidth / window.innerHeight) * Math.tan((60 * Math.PI / 180) / 2) * 45;
-    if (Math.abs(swirlPos.x) > halfW * 0.8) driftVelX *= -1;
-    swirlPos.y = bottomWorldY;
-    swirlPos.z = 0;
-  } else if (isSinking) {
-    // Glide toward the below-screen target with gentle deceleration
-    const dist = swirlPos.distanceTo(swirlCenterTarget);
-    const lerpFactor = Math.min(0.0006, 0.00010 * dist + 0.00003);
-    swirlPos.lerp(swirlCenterTarget, lerpFactor);
-    if (dist < 1.5) {
-      isSinking = false;
-      isResting = true;
-    }
-  } else if (!isArrived) {
-    // Decelerate as it closes in: lerp factor scales with distance so it glides to a halt
-    const dist = swirlPos.distanceTo(pointerRest);
-    const lerpFactor = Math.min(0.0008, 0.00012 * dist + 0.00004);
-    swirlPos.lerp(swirlCenterTarget, lerpFactor);
+  // Compute final destination this frame
+  const dest = new THREE.Vector3();
 
-    // Check if close enough to consider "arrived"
-    if (dist < 1.0) {
-      isArrived = true;
-      // Pick a new very slow, tight orbit when we arrive
-      orbitDir    = Math.random() < 0.5 ? 1 : -1;
-      orbitRadius = 1.5 + Math.random() * 2.5;
-      orbitSpeed  = 0.0004 + Math.random() * 0.0004;
-      orbitAngle  = Math.atan2(swirlPos.y - pointerRest.y, swirlPos.x - pointerRest.x);
-    }
+  if (isResting) {
+    swirlCenterTarget.x += driftVelX;
+    const halfW = (window.innerWidth / window.innerHeight) * Math.tan((60 * Math.PI / 180) / 2) * 45;
+    if (Math.abs(swirlCenterTarget.x) > halfW * 0.8) driftVelX *= -1;
+    dest.set(swirlCenterTarget.x, bottomWorldY + scrollWorldY, 0);
+  } else if (isSinking || !isArrived) {
+    dest.set(
+      swirlCenterTarget.x,
+      swirlCenterTarget.y + scrollWorldY,
+      0
+    );
   } else {
-    // Idle: very slowly orbit around the pointer rest position
+    // Idle orbit
     orbitAngle += orbitDir * orbitSpeed;
-    swirlPos.set(
+    dest.set(
       pointerRest.x + Math.cos(orbitAngle) * orbitRadius,
-      pointerRest.y + Math.sin(orbitAngle) * orbitRadius,
+      pointerRest.y + Math.sin(orbitAngle) * orbitRadius + scrollWorldY,
       0
     );
   }
+
+  // Arrive checks
+  if (isSinking && swirlPos.distanceTo(dest) < 2.0)  { isSinking = false; isResting = true; }
+  if (!isArrived && !isSinking && swirlPos.distanceTo(dest) < 1.5) {
+    isArrived = true;
+    orbitDir    = Math.random() < 0.5 ? 1 : -1;
+    orbitRadius = 1.5 + Math.random() * 2.5;
+    orbitSpeed  = 0.0004 + Math.random() * 0.0004;
+    orbitAngle  = Math.atan2(swirlPos.y - dest.y, swirlPos.x - dest.x);
+  }
+
+  // Two-stage lerp — smooth and jitter-free
+  swirlSmooth.lerp(dest,     LERP_STAGE1);
+  swirlPos.lerp(swirlSmooth, LERP_STAGE2);
   
   material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
   material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
@@ -627,7 +654,29 @@ window.addEventListener('resize', () => {
 const overlay = document.createElement('div');
 overlay.className = 'overlay';
 overlay.innerHTML = `
-  <h1>Swirl Theory</h1>
-  <p>vibrating<br />in<br />hidden<br />dimensions</p>
+  <h1>jaar aarkey </h1>
+  <div class="contact-links">
+    <a class="contact-link" href="mailto:olegudyachenko@gmail.com" aria-label="Email">
+      <span class="label">olegudyachenko@gmail.com</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <polyline points="2,4 12,13 22,4"/>
+      </svg>
+    </a>
+    <a class="contact-link" href="https://www.linkedin.com/in/oleg-dyachenko-287125b9/" target="_blank" rel="noopener" aria-label="LinkedIn">
+      <span class="label">LinkedIn</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
+        <rect x="2" y="9" width="4" height="12"/>
+        <circle cx="4" cy="4" r="2"/>
+      </svg>
+    </a>
+    <a class="contact-link github-link" href="https://github.com/jaaraarkey" target="_blank" rel="noopener" aria-label="GitHub">
+      <span class="label">jaaraarkey</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98 96" width="22" height="22" fill="currentColor">
+        <path d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/>
+      </svg>
+    </a>
+  </div>
 `;
 document.body.appendChild(overlay);
