@@ -63,17 +63,9 @@ for (let i = 0; i < STRINGS_COUNT; i++) {
   }
 }
 
-const geometry = new THREE.BufferGeometry();
-geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TOTAL_VERTICES * 3), 3));
-geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
-
-// Custom Shader Material -> Adjusted for Points & Interactive
-const vertexShader = `
-  uniform float uTime;
-  uniform vec3 uMouse;
-  uniform vec3 uCenter;
-  attribute vec3 aRandom;
+// ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
+// Logarithmic spiral arms — tiered geometry for low/mid/high-end devices
+const SWIRL_SEGS  = SWIRL_PTS - 1;
   
   varying vec3 vColor;
   varying float vOpacity;
@@ -246,38 +238,9 @@ const vertexShader = `
   }
 `;
 
-const fragmentShader = `
-  varying vec3 vColor;
-  varying float vOpacity;
-
-  void main() {
-    gl_FragColor = vec4(vColor, vOpacity);
-  }
-`;
-
-const material = new THREE.ShaderMaterial({
-  vertexShader,
-  fragmentShader,
-  uniforms: {
-    uTime: { value: 0 },
-    uMouse: { value: new THREE.Vector3(0, 0, -200) }, // Default off-camera
-    uCenter: { value: new THREE.Vector3(0, 0, 0) }   // Very slow drift toward pointer
-  },
-  transparent: true,
-  depthWrite: false,
-  blending: THREE.AdditiveBlending,
-});
-
-// LineSegments gives continuous flame-like lines along the torus surface
-// const points = new THREE.LineSegments(geometry, material);
-// Sphere removed — swirl only
-// scene.add(points);
-
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
-// Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = 100;   // number of spiral arms
-const SWIRL_PTS     = 70;   // points per arm
-const SWIRL_SEGS    = SWIRL_PTS - 1;
+// Logarithmic spiral arms — tiered geometry for low/mid/high-end devices
+const SWIRL_SEGS  = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
 const swirlUvs   = new Float32Array(SWIRL_TOTAL * 2);
@@ -452,7 +415,6 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(-999, -999);
 const targetMouse = new THREE.Vector3(0, 0, 0);
 // Center drift target for the sphere (kept for uniforms, sphere hidden)
-const centerTarget = new THREE.Vector3(0, 0, 0);
 // Raw pointer goal — updated instantly on pointermove
 const pointerGoal = new THREE.Vector3(0, 0, 0);
 // Swirl centre target lerps toward pointerGoal each frame (never snaps)
@@ -525,12 +487,6 @@ window.addEventListener('pointermove', (event) => {
   raycaster.setFromCamera(pointer, camera);
   raycaster.ray.intersectPlane(mousePlane, targetMouse);
 
-  centerTarget.set(
-    Math.max(-8, Math.min(8, targetMouse.x * 0.12)),
-    Math.max(-8, Math.min(8, targetMouse.y * 0.12)),
-    0
-  );
-
   // Update raw goal — swirl will glide toward this over time
   pointerGoal.set(targetMouse.x, targetMouse.y + SWIRL_Y_OFFSET, 0);
   pointerRest.copy(pointerGoal);
@@ -566,9 +522,7 @@ function animate() {
   requestAnimationFrame(animate);
   
   const elapsedTime = clock.getElapsedTime();
-  material.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uTime.value = elapsedTime;
-  flameMaterial.uniforms.uCenter.value.copy(material.uniforms.uCenter.value);
 
   // Update ripple age; deactivate once it has fully expanded
   if (rippleStartTime >= 0) {
@@ -632,9 +586,6 @@ function animate() {
   swirlSmooth.lerp(dest,     LERP_STAGE1);
   swirlPos.lerp(swirlSmooth, LERP_STAGE2);
   
-  material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
-  material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
-
   // Render via composer for Bloom
   composer.render();
 }
