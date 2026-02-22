@@ -9,7 +9,7 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x000000, 0.015);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 75; // Slightly zoomed in
+camera.position.z = 45; // Zoomed in
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -269,13 +269,13 @@ const material = new THREE.ShaderMaterial({
 });
 
 // LineSegments gives continuous flame-like lines along the torus surface
-const points = new THREE.LineSegments(geometry, material);
+// const points = new THREE.LineSegments(geometry, material);
 // Sphere removed — swirl only
 // scene.add(points);
 
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
 // Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = 60;   // number of spiral arms
+const SWIRL_ARMS    = 100;   // number of spiral arms
 const SWIRL_PTS     = 70;   // points per arm
 const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
@@ -466,6 +466,37 @@ let orbitRadius    = 1.5 + Math.random() * 2.5;  // small tight orbit
 let orbitSpeed     = 0.0004 + Math.random() * 0.0004; // very slow
 let isArrived      = false;
 
+// Sink-to-bottom state
+// After pointer stops (or after a click), the swirl slowly sinks below the screen
+// and then drifts lazily left/right along that hidden strip.
+const IDLE_TIMEOUT   = 1800;  // ms of no pointer movement before sinking starts
+let   lastMoveTime   = Date.now();
+let   isSinking      = false;  // currently heading toward the resting-below-screen position
+let   isResting      = false;  // has reached below-screen, now drifting
+let   driftVelX      = 0;      // world-units/frame drift speed
+let   bottomWorldY   = 0;      // computed once per sink: world Y for 16px below bottom edge
+
+function computeBottomWorldY(): number {
+  // Convert NDC (0, -1) bottom edge to world, then go 16px further down.
+  // At Z=0 plane with PerspectiveCamera(60°, ...) at z=75:
+  const halfH = Math.tan((60 * Math.PI / 180) / 2) * 45;
+  const pxPerUnit = (window.innerHeight / 2) / halfH;
+  return -halfH - (16 / pxPerUnit);
+}
+
+function startSink() {
+  if (isSinking || isResting) return;
+  isSinking   = true;
+  isArrived   = false;
+  bottomWorldY = computeBottomWorldY();
+  // Random horizontal landing spot within the visible width
+  const halfW = (window.innerWidth / window.innerHeight) * Math.tan((60 * Math.PI / 180) / 2) * 45;
+  const landX = (Math.random() * 2 - 1) * halfW * 0.6;
+  swirlCenterTarget.set(landX, bottomWorldY, 0);
+  // Random slow drift direction once landed
+  driftVelX = (Math.random() * 0.015 + 0.005) * (Math.random() < 0.5 ? 1 : -1);
+}
+
 window.addEventListener('pointermove', (event) => {
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -482,7 +513,10 @@ window.addEventListener('pointermove', (event) => {
   // Update resting position and reset arrived state so swirl chases the new position
   pointerRest.set(targetMouse.x, targetMouse.y, 0);
   swirlCenterTarget.copy(pointerRest);
-  isArrived = false;
+  isArrived  = false;
+  isSinking  = false;
+  isResting  = false;
+  lastMoveTime = Date.now();
 });
 
 // Ripple state
@@ -500,6 +534,8 @@ window.addEventListener('pointerdown', (event) => {
   raycaster.ray.intersectPlane(mousePlane, clickTarget);
   flameMaterial.uniforms.uRippleOrigin.value.copy(clickTarget);
   rippleStartTime = clock.getElapsedTime();
+  // Clicking also triggers the sink
+  lastMoveTime = 0; // force idle timeout to fire immediately
 });
 
 // Animation Loop
@@ -522,7 +558,29 @@ function animate() {
 
   const swirlPos = flameMaterial.uniforms.uSwirlCenter.value;
 
-  if (!isArrived) {
+  // Check if pointer has been idle long enough to start sinking
+  if (!isSinking && !isResting && Date.now() - lastMoveTime > IDLE_TIMEOUT) {
+    startSink();
+  }
+
+  if (isResting) {
+    // Drift slowly left/right along the below-screen strip
+    swirlPos.x += driftVelX;
+    // Gently bounce within a wide horizontal band
+    const halfW = (window.innerWidth / window.innerHeight) * Math.tan((60 * Math.PI / 180) / 2) * 45;
+    if (Math.abs(swirlPos.x) > halfW * 0.8) driftVelX *= -1;
+    swirlPos.y = bottomWorldY;
+    swirlPos.z = 0;
+  } else if (isSinking) {
+    // Glide toward the below-screen target with gentle deceleration
+    const dist = swirlPos.distanceTo(swirlCenterTarget);
+    const lerpFactor = Math.min(0.0006, 0.00010 * dist + 0.00003);
+    swirlPos.lerp(swirlCenterTarget, lerpFactor);
+    if (dist < 1.5) {
+      isSinking = false;
+      isResting = true;
+    }
+  } else if (!isArrived) {
     // Decelerate as it closes in: lerp factor scales with distance so it glides to a halt
     const dist = swirlPos.distanceTo(pointerRest);
     const lerpFactor = Math.min(0.0008, 0.00012 * dist + 0.00004);
