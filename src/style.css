@@ -23,6 +23,7 @@ canvas {
   width: 100vw;
   height: 100vh;
   outline: none;
+  pointer-events: none;
 }
 
 .overlay {
@@ -76,14 +77,19 @@ p {
   gap: 0;
   color: rgba(255, 255, 255, 0.45);
   text-decoration: none;
-  transition: color 0.35s ease, filter 0.35s ease;
+  transition: color 0.4s ease, filter 0.5s ease, text-shadow 0.5s ease;
   filter: drop-shadow(0 0 0px transparent);
   overflow: hidden;
 }
 
 .contact-links a:hover {
   color: rgba(255, 255, 255, 0.95);
-  filter: drop-shadow(0 0 8px rgba(76, 201, 240, 0.8));
+  filter:
+    drop-shadow(0 0 6px rgba(76, 201, 240, 0.55))
+    drop-shadow(0 0 18px rgba(114, 9, 183, 0.35));
+  text-shadow:
+    0 0 8px rgba(76, 201, 240, 0.6),
+    0 0 22px rgba(114, 9, 183, 0.3);
 }
 
 .contact-links svg {
@@ -116,6 +122,19 @@ p {
   margin-right: 8px;
 }
 
+/* Mobile bar: hidden on desktop by default */
+.mobile-bar {
+  display: none;
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  align-items: center;
+  z-index: 9999;
+  pointer-events: all;
+}
+
 @media (max-width: 768px) {
   .overlay {
     padding: 16px;
@@ -133,21 +152,88 @@ p {
     font-size: 1rem;
   }
 
+  /* Hide desktop links, show mobile bar */
   .contact-links {
-    position: fixed;
-    bottom: 8px;
-    right: 0;
-    left: 0;
-    align-items: center;
-    gap: 10px;
+    display: none;
   }
 
-  .contact-links svg {
-    width: 24px;
-    height: 24px;
+  .mobile-bar {
+    display: flex;
   }
+}
 
-  .link-label {
-    font-size: 0.7rem;
-  }
+/* Toggle circle — matte white glass */
+.mobile-bar__toggle {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: block;
+  margin: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #d8d8d8;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.mobile-bar__toggle:active,
+.mobile-bar__toggle.is-open {
+  background: #c4c4c4;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+}
+
+/* Glassy pearl drawer */
+.mobile-bar__drawer {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* collapsed */
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0;
+  margin-bottom: 0;
+  transition:
+    max-height    0.52s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity       0.40s cubic-bezier(0.22, 1, 0.36, 1),
+    padding-top   0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    padding-bottom 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    margin-bottom 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mobile-bar__drawer.is-open {
+  max-height: 280px;
+  opacity: 1;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 10px;
+}
+
+.mobile-bar__drawer a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d8d8d8;
+  text-decoration: none;
+  transition: color 0.3s ease, filter 0.3s ease;
+}
+
+.mobile-bar__drawer a:hover,
+.mobile-bar__drawer a:active {
+  color: #ffffff;
+  filter: drop-shadow(0 0 6px rgba(216, 216, 216, 0.55));
+}
+
+.mobile-bar__drawer svg {
+  width: 34px;
+  height: 34px;
 }
