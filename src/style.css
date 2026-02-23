@@ -119,6 +119,9 @@ p {
 @media (max-width: 768px) {
   .overlay {
     padding: 16px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
 
   h1 {
@@ -131,8 +134,11 @@ p {
   }
 
   .contact-links {
+    position: fixed;
     bottom: 8px;
-    right: 8px;
+    right: 0;
+    left: 0;
+    align-items: center;
     gap: 10px;
   }
 
