@@ -87,8 +87,8 @@ p {
 }
 
 .contact-links svg {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
 }
 
@@ -106,7 +106,7 @@ p {
   /* cubic ease that feels organic: slow start, smooth settle */
   transition:
     max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity   0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1),
     margin-right 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -143,8 +143,8 @@ p {
   }
 
   .contact-links svg {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
   }
 
   .link-label {
