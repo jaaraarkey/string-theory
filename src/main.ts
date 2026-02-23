@@ -782,9 +782,77 @@ mobileBar.innerHTML = `
 `;
 document.body.appendChild(mobileBar);
 
+// ── Circle-expand transition overlay ─────────────────────────────────────────
+const rippleOverlay = document.createElement('div');
+rippleOverlay.id = 'mob-ripple';
+document.body.appendChild(rippleOverlay);
+
 const mobToggle = document.getElementById('mob-toggle')!;
 const mobDrawer = document.getElementById('mob-drawer')!;
-mobToggle.addEventListener('click', () => {
-  const open = mobDrawer.classList.toggle('is-open');
-  mobToggle.classList.toggle('is-open', open);
+
+function openDrawer() {
+  mobDrawer.classList.add('is-open');
+  mobToggle.classList.add('is-hidden');
+}
+
+function closeDrawer() {
+  mobDrawer.classList.remove('is-open');
+  mobToggle.classList.remove('is-hidden');
+}
+
+mobToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (mobDrawer.classList.contains('is-open')) {
+    closeDrawer();
+  } else {
+    openDrawer();
+  }
+});
+
+// Close on tap anywhere outside the drawer
+document.addEventListener('click', (e) => {
+  if (!mobDrawer.classList.contains('is-open')) return;
+  if (mobDrawer.contains(e.target as Node)) return;
+  closeDrawer();
+});
+
+// Intercept drawer link clicks → expand circle → navigate
+mobDrawer.addEventListener('click', (e) => {
+  const anchor = (e.target as Element).closest('a') as HTMLAnchorElement | null;
+  if (!anchor) return;
+  const href = anchor.getAttribute('href');
+  if (!href) return;
+  const isExternal = anchor.target === '_blank';
+  // For mailto: open immediately, no animation needed
+  if (href.startsWith('mailto:')) return;
+  e.preventDefault();
+
+  // Position ripple at the circle's center
+  const toggleRect = mobToggle.getBoundingClientRect();
+  const cx = toggleRect.left + toggleRect.width / 2;
+  const cy = toggleRect.top + toggleRect.height / 2;
+  const maxDim = Math.hypot(Math.max(cx, window.innerWidth - cx), Math.max(cy, window.innerHeight - cy)) * 2;
+
+  rippleOverlay.style.left = cx + 'px';
+  rippleOverlay.style.top  = cy + 'px';
+  rippleOverlay.style.width  = '56px';
+  rippleOverlay.style.height = '56px';
+  rippleOverlay.style.marginLeft = '-28px';
+  rippleOverlay.style.marginTop  = '-28px';
+  rippleOverlay.style.setProperty('--ripple-size', maxDim + 'px');
+  rippleOverlay.classList.remove('is-expanding');
+  // force reflow
+  void rippleOverlay.offsetWidth;
+  rippleOverlay.classList.add('is-expanding');
+
+  setTimeout(() => {
+    if (isExternal) {
+      window.open(href, '_blank', 'noopener');
+    } else {
+      window.location.href = href;
+    }
+    setTimeout(() => {
+      rippleOverlay.classList.remove('is-expanding');
+    }, 400);
+  }, 520);
 });

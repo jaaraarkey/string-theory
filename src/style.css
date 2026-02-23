@@ -174,13 +174,18 @@ p {
   background: #d8d8d8;
   border: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-  transition: background 0.3s ease, box-shadow 0.3s ease;
+  transition: background 0.3s ease, box-shadow 0.3s ease, opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.mobile-bar__toggle:active,
-.mobile-bar__toggle.is-open {
+.mobile-bar__toggle:active {
   background: #c4c4c4;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.24);
+}
+
+.mobile-bar__toggle.is-hidden {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
 }
 
 /* Glassy pearl drawer */
@@ -233,6 +238,35 @@ p {
 }
 
 .mobile-bar__drawer svg {
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
+}
+
+/* Circle-expand transition overlay */
+#mob-ripple {
+  position: fixed;
+  border-radius: 50%;
+  background: #d8d8d8;
+  pointer-events: none;
+  z-index: 99999;
+  opacity: 0;
+  transform: scale(1);
+  transition: none;
+}
+
+#mob-ripple.is-expanding {
+  opacity: 1;
+  animation: mob-ripple-grow 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes mob-ripple-grow {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(calc(var(--ripple-size) / 56px));
+    opacity: 1;
+  }
 }
