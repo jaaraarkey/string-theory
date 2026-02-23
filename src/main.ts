@@ -477,18 +477,21 @@ let orbitSpeed     = 0.0004 + Math.random() * 0.0004; // very slow
 let isArrived      = false;
 
 // Sink-to-bottom state
-// After pointer stops (or after a click), the swirl slowly sinks below the screen
-// and then drifts lazily left/right along that hidden strip.
 const IDLE_TIMEOUT   = 1800;  // ms of no pointer movement before sinking starts
 let   lastMoveTime   = Date.now();
 let   isSinking      = false;
 let   isResting      = false;
-let   driftVelX      = 0;
-let   bottomWorldY   = 0;
+
+// Swirl velocity tracking — used for inertia when sink begins
+const swirlVel     = new THREE.Vector3(); // world units per frame
+const prevSwirlPos = new THREE.Vector3(); // previous frame position
+let   sinkStartTime  = 0;                 // clock time when sink began
+const SINK_COAST_DUR = 1.4;              // seconds of inertia coast before nav pull takes over
+const SINK_PULL_DUR  = 3.5;             // seconds for nav pull to reach full strength
 
 // Teleport state — fade out, snap position, fade back in
 const FADE_OUT_DUR = 0.25;  // seconds to dim to 0
-const FADE_IN_DUR  = 0.45;  // seconds to brighten back to 1
+const FADE_IN_DUR  = 0.25;  // seconds to brighten back to 1
 let   teleportPhase: 'none' | 'fadeOut' | 'fadeIn' = 'none';
 let   teleportStartTime = 0;
 let   teleportDestination = new THREE.Vector3();
@@ -519,13 +522,11 @@ function getNavWorldPos(): THREE.Vector3 {
 
 function startSink() {
   if (isSinking || isResting) return;
-  isSinking    = true;
-  isArrived    = false;
-  bottomWorldY = computeBottomWorldY();
-  // Sink toward the contact-links nav center
-  const navPos = getNavWorldPos();
-  swirlCenterTarget.copy(navPos);
-  driftVelX = 0; // no side-drift — it orbits the nav
+  isSinking     = true;
+  isArrived     = false;
+  sinkStartTime = clock.getElapsedTime();
+  // Target is the nav center — pull builds in slowly
+  swirlCenterTarget.copy(getNavWorldPos());
 }
 
 window.addEventListener('wheel', (event) => {
@@ -647,24 +648,39 @@ function animate() {
     const navPos = getNavWorldPos();
     orbitAngle += orbitDir * orbitSpeed;
     swirlPos.set(
-      navPos.x + Math.cos(orbitAngle) * orbitRadius + scrollWorldY * 0,
+      navPos.x + Math.cos(orbitAngle) * orbitRadius,
       navPos.y + Math.sin(orbitAngle) * orbitRadius,
       0
     );
   } else if (isSinking) {
-    // Glide toward the below-screen target with gentle deceleration
-    const scrolledTarget = swirlCenterTarget.clone();
-    scrolledTarget.y += scrollWorldY;
-    const dist = swirlPos.distanceTo(scrolledTarget);
-    const lerpFactor = Math.min(0.0006, 0.00010 * dist + 0.00003);
-    swirlPos.lerp(scrolledTarget, lerpFactor);
-    if (dist < 1.5) {
+    const navPos = getNavWorldPos();
+    const sinkAge = elapsedTime - sinkStartTime;
+
+    // Phase 1: coast on existing velocity, decaying fast (pointer direction momentum)
+    const coastT  = Math.min(1, sinkAge / SINK_COAST_DUR);
+    void coastT; // used conceptually via inertia decay below
+
+    // Phase 2: nav pull ramps in slowly after coast fades
+    const pullT   = Math.max(0, (sinkAge - SINK_COAST_DUR * 0.3) / SINK_PULL_DUR);
+    // Ease-in cubic so it starts imperceptibly slow
+    const pullWeight = Math.min(1, pullT * pullT * pullT) * 0.0012;
+
+    // Apply inertia coast (velocity decays each frame)
+    swirlVel.multiplyScalar(0.94);
+    swirlPos.add(swirlVel);
+
+    // Apply nav pull
+    const toNav = navPos.clone().sub(swirlPos);
+    swirlPos.addScaledVector(toNav, pullWeight);
+
+    // Arrived?
+    if (swirlPos.distanceTo(navPos) < 2.0 && sinkAge > SINK_COAST_DUR) {
       isSinking   = false;
       isResting   = true;
       orbitDir    = Math.random() < 0.5 ? 1 : -1;
-      orbitRadius = 3.0 + Math.random() * 2.0;   // small orbit around nav
+      orbitRadius = 3.0 + Math.random() * 2.0;
       orbitSpeed  = 0.0005 + Math.random() * 0.0003;
-      orbitAngle  = Math.atan2(swirlPos.y - getNavWorldPos().y, swirlPos.x - getNavWorldPos().x);
+      orbitAngle  = Math.atan2(swirlPos.y - navPos.y, swirlPos.x - navPos.x);
     }
   } else if (!isArrived) {
     // Decelerate as it closes in: lerp factor scales with distance so it glides to a halt
@@ -693,6 +709,12 @@ function animate() {
     );
   }
   
+  // Sample swirl velocity for inertia (used when sink starts)
+  if (!isSinking) {
+    swirlVel.subVectors(swirlPos, prevSwirlPos);
+  }
+  prevSwirlPos.copy(swirlPos);
+
   material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
   material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
 
