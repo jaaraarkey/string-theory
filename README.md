@@ -1,6 +1,6 @@
-# String Theory ✨
+# Swirl Theory ✨
 
-A stunning, GPU-accelerated **string theory** visualization built with [Three.js](https://threejs.org/) and custom **GLSL shaders**, deployed to the web.
+A stunning, GPU-accelerated **swirl theory** visualization built with [Three.js](https://threejs.org/) and custom **GLSL shaders**, deployed to the web.
 
 Inspired by the theoretical physics concept where fundamental particles are modeled as one-dimensional, vibrating strings of energy existing in multiple hidden dimensions, this animation recreates that concept as an interactive, evolving cosmic artwork.
 
@@ -37,8 +37,8 @@ Inspired by the theoretical physics concept where fundamental particles are mode
 ### Installation
 
 ```bash
-git clone https://github.com/jaaraarkey/string-theory.git
-cd string-theory
+git clone https://github.com/jaaraarkey/swirl-theory.git
+cd swirl-theory
 npm install
 ```
 
@@ -76,7 +76,7 @@ This project is designed to be deployed to the **DFINITY Internet Computer** (IC
 ## 📂 Project Structure
 
 ```
-string-theory/
+swirl-theory/
 ├── src/
 │   ├── main.ts        # Three.js scene + GLSL shaders
 │   └── style.css      # Full-screen canvas styles

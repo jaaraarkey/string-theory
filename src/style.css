@@ -175,6 +175,41 @@ p {
   border: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   transition: background 0.3s ease, box-shadow 0.3s ease, opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: toggle-morph 9s ease-in-out infinite;
+}
+
+@keyframes toggle-morph {
+  0% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+  }
+
+  12% {
+    border-radius: 52% 48% 51% 49% / 47% 53% 48% 52%;
+  }
+
+  27% {
+    border-radius: 48% 54% 50% 50% / 53% 46% 54% 47%;
+  }
+
+  41% {
+    border-radius: 50% 49% 53% 47% / 50% 52% 48% 50%;
+  }
+
+  55% {
+    border-radius: 46% 52% 48% 54% / 52% 48% 53% 47%;
+  }
+
+  68% {
+    border-radius: 53% 47% 50% 50% / 48% 54% 46% 52%;
+  }
+
+  82% {
+    border-radius: 49% 51% 46% 54% / 54% 47% 52% 48%;
+  }
+
+  100% {
+    border-radius: 50% 50% 50% 50% / 50% 50% 50% 50%;
+  }
 }
 
 .mobile-bar__toggle:active {
