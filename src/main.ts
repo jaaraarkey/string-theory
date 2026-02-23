@@ -63,9 +63,17 @@ for (let i = 0; i < STRINGS_COUNT; i++) {
   }
 }
 
-// ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
-// Logarithmic spiral arms — tiered geometry for low/mid/high-end devices
-const SWIRL_SEGS  = SWIRL_PTS - 1;
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TOTAL_VERTICES * 3), 3));
+geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+
+// Custom Shader Material -> Adjusted for Points & Interactive
+const vertexShader = `
+  uniform float uTime;
+  uniform vec3 uMouse;
+  uniform vec3 uCenter;
+  attribute vec3 aRandom;
   
   varying vec3 vColor;
   varying float vOpacity;
@@ -238,9 +246,38 @@ const SWIRL_SEGS  = SWIRL_PTS - 1;
   }
 `;
 
+const fragmentShader = `
+  varying vec3 vColor;
+  varying float vOpacity;
+
+  void main() {
+    gl_FragColor = vec4(vColor, vOpacity);
+  }
+`;
+
+const material = new THREE.ShaderMaterial({
+  vertexShader,
+  fragmentShader,
+  uniforms: {
+    uTime: { value: 0 },
+    uMouse: { value: new THREE.Vector3(0, 0, -200) }, // Default off-camera
+    uCenter: { value: new THREE.Vector3(0, 0, 0) }   // Very slow drift toward pointer
+  },
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+
+// LineSegments gives continuous flame-like lines along the torus surface
+// const points = new THREE.LineSegments(geometry, material);
+// Sphere removed — swirl only
+// scene.add(points);
+
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
-// Logarithmic spiral arms — tiered geometry for low/mid/high-end devices
-const SWIRL_SEGS  = SWIRL_PTS - 1;
+// Logarithmic spiral arms that revolve very slowly from the screen edges inward.
+const SWIRL_ARMS    = 100;   // number of spiral arms
+const SWIRL_PTS     = 70;   // points per arm
+const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
 const swirlUvs   = new Float32Array(SWIRL_TOTAL * 2);
@@ -358,6 +395,7 @@ const flameFragmentShader = `
   varying float vT;
   varying float vRippleInfluence;
   varying float vRippleAge;
+  uniform float uGlobalOpacity;
 
   void main() {
     // Base palette: deep violet → lavender silver → ice white
@@ -387,7 +425,7 @@ const flameFragmentShader = `
 
     col = mix(col, rippleCol, vRippleInfluence);
 
-    gl_FragColor = vec4(col, vFlameOpacity);
+    gl_FragColor = vec4(col, vFlameOpacity * uGlobalOpacity);
   }
 `;
 
@@ -400,6 +438,7 @@ const flameMaterial = new THREE.ShaderMaterial({
     uSwirlCenter:  { value: new THREE.Vector3(0, 0, 0) },
     uRippleOrigin: { value: new THREE.Vector3(0, 0, 0) },
     uRippleTime:   { value: -1.0 }, // -1 = no active ripple
+    uGlobalOpacity:{ value: 1.0 },
   },
   transparent: true,
   depthWrite:  false,
@@ -415,24 +454,19 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(-999, -999);
 const targetMouse = new THREE.Vector3(0, 0, 0);
 // Center drift target for the sphere (kept for uniforms, sphere hidden)
-// Raw pointer goal — updated instantly on pointermove
-const pointerGoal = new THREE.Vector3(0, 0, 0);
-// Swirl centre target lerps toward pointerGoal each frame (never snaps)
+const centerTarget = new THREE.Vector3(0, 0, 0);
+// Swirl centre target — follows pointer slowly across the full screen
 const swirlCenterTarget = new THREE.Vector3(0, 0, 0);
 // The resting pointer position (where the pointer last stopped)
 const pointerRest = new THREE.Vector3(0, 0, 0);
+// Previous pointer world pos — used to compute movement speed for dynamic droop
+const prevPointerWorld = new THREE.Vector3(0, 0, 0);
 // How far below the pointer the swirl center sits (world units)
-const SWIRL_Y_OFFSET = -12;
+const SWIRL_Y_OFFSET = -12;  // constant downward bias
 
 // Scroll-driven Y lift: wheel events push the swirl upward like it's attached to the page
-let scrollWorldY = 0;
-let scrollVelY   = 0;
-
-// Two-stage lerp for buttery movement:
-// swirlSmooth slowly chases swirlCenterTarget, swirlPos slowly chases swirlSmooth
-const swirlSmooth = new THREE.Vector3(0, 0, 0);
-const LERP_STAGE1 = 0.004; // how fast the intermediate target moves
-const LERP_STAGE2 = 0.006; // how fast the actual position catches up
+let scrollWorldY = 0;        // accumulated world-unit scroll offset
+let scrollVelY   = 0;        // inertia velocity (decays each frame)
 const mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
 // Idle orbit state — kicks in once the swirl centre has reached the pointer
@@ -447,10 +481,17 @@ let isArrived      = false;
 // and then drifts lazily left/right along that hidden strip.
 const IDLE_TIMEOUT   = 1800;  // ms of no pointer movement before sinking starts
 let   lastMoveTime   = Date.now();
-let   isSinking      = false;  // currently heading toward the resting-below-screen position
-let   isResting      = false;  // has reached below-screen, now drifting
-let   driftVelX      = 0;      // world-units/frame drift speed
-let   bottomWorldY   = 0;      // computed once per sink: world Y for 16px below bottom edge
+let   isSinking      = false;
+let   isResting      = false;
+let   driftVelX      = 0;
+let   bottomWorldY   = 0;
+
+// Teleport state — fade out, snap position, fade back in
+const FADE_OUT_DUR = 0.25;  // seconds to dim to 0
+const FADE_IN_DUR  = 0.45;  // seconds to brighten back to 1
+let   teleportPhase: 'none' | 'fadeOut' | 'fadeIn' = 'none';
+let   teleportStartTime = 0;
+let   teleportDestination = new THREE.Vector3();
 
 function computeBottomWorldY(): number {
   // Convert NDC (0, -1) bottom edge to world, then go 16px further down.
@@ -460,24 +501,38 @@ function computeBottomWorldY(): number {
   return -halfH - (16 / pxPerUnit);
 }
 
+function getNavWorldPos(): THREE.Vector3 {
+  // Get the screen-space center of the contact-links nav and unproject to world Z=0
+  const nav = document.querySelector('.contact-links');
+  if (!nav) return new THREE.Vector3(0, computeBottomWorldY(), 0);
+  const rect = nav.getBoundingClientRect();
+  const cx = rect.left + rect.width  / 2;
+  const cy = rect.top  + rect.height / 2;
+  // NDC
+  const ndcX =  (cx / window.innerWidth)  * 2 - 1;
+  const ndcY = -(cy / window.innerHeight) * 2 + 1;
+  // Unproject: at z=0 plane, camera at z=45
+  const halfH = Math.tan((60 * Math.PI / 180) / 2) * 45;
+  const halfW = halfH * (window.innerWidth / window.innerHeight);
+  return new THREE.Vector3(ndcX * halfW, ndcY * halfH, 0);
+}
+
 function startSink() {
   if (isSinking || isResting) return;
-  isSinking   = true;
-  isArrived   = false;
+  isSinking    = true;
+  isArrived    = false;
   bottomWorldY = computeBottomWorldY();
-  // Random horizontal landing spot within the visible width
-  const halfW = (window.innerWidth / window.innerHeight) * Math.tan((60 * Math.PI / 180) / 2) * 45;
-  const landX = (Math.random() * 2 - 1) * halfW * 0.6;
-  swirlCenterTarget.set(landX, bottomWorldY, 0);
-  // Random slow drift direction once landed
-  driftVelX = (Math.random() * 0.004 + 0.001) * (Math.random() < 0.5 ? 1 : -1);
+  // Sink toward the contact-links nav center
+  const navPos = getNavWorldPos();
+  swirlCenterTarget.copy(navPos);
+  driftVelX = 0; // no side-drift — it orbits the nav
 }
 
 window.addEventListener('wheel', (event) => {
   // Convert pixel delta to world units — scale so one page-worth feels natural
   const halfH = Math.tan((60 * Math.PI / 180) / 2) * 45;
   const worldPerPx = (halfH * 2) / window.innerHeight;
-  scrollVelY -= event.deltaY * worldPerPx * 0.15;  // negative deltaY = scroll up = swirl goes up
+  scrollVelY -= event.deltaY * worldPerPx * 0.6;  // negative deltaY = scroll up = swirl goes up
 }, { passive: true });
 
 window.addEventListener('pointermove', (event) => {
@@ -487,9 +542,20 @@ window.addEventListener('pointermove', (event) => {
   raycaster.setFromCamera(pointer, camera);
   raycaster.ray.intersectPlane(mousePlane, targetMouse);
 
-  // Update raw goal — swirl will glide toward this over time
-  pointerGoal.set(targetMouse.x, targetMouse.y + SWIRL_Y_OFFSET, 0);
-  pointerRest.copy(pointerGoal);
+  centerTarget.set(
+    Math.max(-8, Math.min(8, targetMouse.x * 0.12)),
+    Math.max(-8, Math.min(8, targetMouse.y * 0.12)),
+    0
+  );
+
+  // Update resting position — swirl center sits SWIRL_Y_OFFSET units below the pointer
+  const pointerSpeed = targetMouse.distanceTo(prevPointerWorld);
+  prevPointerWorld.copy(targetMouse);
+  // Extra dynamic droop: faster movement = swirl lags further down (capped)
+  const dynamicDroop = Math.min(pointerSpeed * 1.2, 8);
+  const targetY = targetMouse.y + SWIRL_Y_OFFSET - dynamicDroop;
+  pointerRest.set(targetMouse.x, targetY, 0);
+  swirlCenterTarget.copy(pointerRest);
   isArrived  = false;
   isSinking  = false;
   isResting  = false;
@@ -501,7 +567,6 @@ let rippleStartTime = -1; // elapsed time when last click happened
 const RIPPLE_DURATION = 2.2;
 
 window.addEventListener('pointerdown', (event) => {
-  // Convert click to 3D world position on the Z=0 plane
   const clickPointer = new THREE.Vector2(
     (event.clientX / window.innerWidth) * 2 - 1,
     -(event.clientY / window.innerHeight) * 2 + 1
@@ -509,10 +574,21 @@ window.addEventListener('pointerdown', (event) => {
   const clickTarget = new THREE.Vector3();
   raycaster.setFromCamera(clickPointer, camera);
   raycaster.ray.intersectPlane(mousePlane, clickTarget);
+
+  // Fire ripple at click position
   flameMaterial.uniforms.uRippleOrigin.value.copy(clickTarget);
   rippleStartTime = clock.getElapsedTime();
-  // Clicking also triggers the sink
-  lastMoveTime = 0; // force idle timeout to fire immediately
+
+  // Start teleport: fade out → snap to click → fade in
+  teleportDestination.copy(clickTarget);
+  teleportPhase     = 'fadeOut';
+  teleportStartTime = clock.getElapsedTime();
+
+  // Wake swirl up — cancel any sink/rest so it follows after arriving
+  isSinking  = false;
+  isResting  = false;
+  isArrived  = false;
+  lastMoveTime = Date.now();
 });
 
 // Animation Loop
@@ -522,7 +598,9 @@ function animate() {
   requestAnimationFrame(animate);
   
   const elapsedTime = clock.getElapsedTime();
+  material.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uTime.value = elapsedTime;
+  flameMaterial.uniforms.uCenter.value.copy(material.uniforms.uCenter.value);
 
   // Update ripple age; deactivate once it has fully expanded
   if (rippleStartTime >= 0) {
@@ -533,59 +611,91 @@ function animate() {
 
   const swirlPos = flameMaterial.uniforms.uSwirlCenter.value;
 
-  // Scroll inertia
-  scrollVelY   *= 0.90;
-  scrollWorldY += scrollVelY;
-  scrollWorldY *= 0.988;
-
-  // Smoothly glide swirlCenterTarget toward the pointer goal (only when following)
-  if (!isSinking && !isResting) {
-    swirlCenterTarget.lerp(pointerGoal, 0.03);
+  // ── Teleport fade ──
+  if (teleportPhase === 'fadeOut') {
+    const t = (elapsedTime - teleportStartTime) / FADE_OUT_DUR;
+    flameMaterial.uniforms.uGlobalOpacity.value = Math.max(0, 1 - t);
+    if (t >= 1) {
+      // Snap to destination
+      swirlPos.copy(teleportDestination);
+      swirlCenterTarget.copy(teleportDestination);
+      pointerRest.copy(teleportDestination);
+      teleportPhase     = 'fadeIn';
+      teleportStartTime = elapsedTime;
+    }
+  } else if (teleportPhase === 'fadeIn') {
+    const t = (elapsedTime - teleportStartTime) / FADE_IN_DUR;
+    flameMaterial.uniforms.uGlobalOpacity.value = Math.min(1, t);
+    if (t >= 1) {
+      flameMaterial.uniforms.uGlobalOpacity.value = 1;
+      teleportPhase = 'none';
+    }
   }
 
-  // Idle timeout — start sinking
+  // Scroll inertia — decay velocity and accumulate offset
+  scrollVelY *= 0.88;                     // friction
+  scrollWorldY += scrollVelY;             // integrate
+  scrollWorldY *= 0.96;                   // slowly drift back to 0 when idle
+
+  // Check if pointer has been idle long enough to start sinking
   if (!isSinking && !isResting && Date.now() - lastMoveTime > IDLE_TIMEOUT) {
     startSink();
   }
 
-  // Compute final destination this frame
-  const dest = new THREE.Vector3();
-
   if (isResting) {
-    swirlCenterTarget.x += driftVelX;
-    const halfW = (window.innerWidth / window.innerHeight) * Math.tan((60 * Math.PI / 180) / 2) * 45;
-    if (Math.abs(swirlCenterTarget.x) > halfW * 0.8) driftVelX *= -1;
-    dest.set(swirlCenterTarget.x, bottomWorldY + scrollWorldY, 0);
-  } else if (isSinking || !isArrived) {
-    dest.set(
-      swirlCenterTarget.x,
-      swirlCenterTarget.y + scrollWorldY,
+    // Slowly orbit the contact-links nav center
+    const navPos = getNavWorldPos();
+    orbitAngle += orbitDir * orbitSpeed;
+    swirlPos.set(
+      navPos.x + Math.cos(orbitAngle) * orbitRadius + scrollWorldY * 0,
+      navPos.y + Math.sin(orbitAngle) * orbitRadius,
       0
     );
+  } else if (isSinking) {
+    // Glide toward the below-screen target with gentle deceleration
+    const scrolledTarget = swirlCenterTarget.clone();
+    scrolledTarget.y += scrollWorldY;
+    const dist = swirlPos.distanceTo(scrolledTarget);
+    const lerpFactor = Math.min(0.0006, 0.00010 * dist + 0.00003);
+    swirlPos.lerp(scrolledTarget, lerpFactor);
+    if (dist < 1.5) {
+      isSinking   = false;
+      isResting   = true;
+      orbitDir    = Math.random() < 0.5 ? 1 : -1;
+      orbitRadius = 3.0 + Math.random() * 2.0;   // small orbit around nav
+      orbitSpeed  = 0.0005 + Math.random() * 0.0003;
+      orbitAngle  = Math.atan2(swirlPos.y - getNavWorldPos().y, swirlPos.x - getNavWorldPos().x);
+    }
+  } else if (!isArrived) {
+    // Decelerate as it closes in: lerp factor scales with distance so it glides to a halt
+    const scrolledTarget = swirlCenterTarget.clone();
+    scrolledTarget.y += scrollWorldY;
+    const dist = swirlPos.distanceTo(scrolledTarget);
+    const lerpFactor = Math.min(0.0008, 0.00012 * dist + 0.00004);
+    swirlPos.lerp(scrolledTarget, lerpFactor);
+
+    // Check if close enough to consider "arrived"
+    if (dist < 1.0) {
+      isArrived = true;
+      // Pick a new very slow, tight orbit when we arrive
+      orbitDir    = Math.random() < 0.5 ? 1 : -1;
+      orbitRadius = 1.5 + Math.random() * 2.5;
+      orbitSpeed  = 0.0004 + Math.random() * 0.0004;
+      orbitAngle  = Math.atan2(swirlPos.y - pointerRest.y, swirlPos.x - pointerRest.x);
+    }
   } else {
-    // Idle orbit
+    // Idle: very slowly orbit around the pointer rest position
     orbitAngle += orbitDir * orbitSpeed;
-    dest.set(
+    swirlPos.set(
       pointerRest.x + Math.cos(orbitAngle) * orbitRadius,
       pointerRest.y + Math.sin(orbitAngle) * orbitRadius + scrollWorldY,
       0
     );
   }
-
-  // Arrive checks
-  if (isSinking && swirlPos.distanceTo(dest) < 2.0)  { isSinking = false; isResting = true; }
-  if (!isArrived && !isSinking && swirlPos.distanceTo(dest) < 1.5) {
-    isArrived = true;
-    orbitDir    = Math.random() < 0.5 ? 1 : -1;
-    orbitRadius = 1.5 + Math.random() * 2.5;
-    orbitSpeed  = 0.0004 + Math.random() * 0.0004;
-    orbitAngle  = Math.atan2(swirlPos.y - dest.y, swirlPos.x - dest.x);
-  }
-
-  // Two-stage lerp — smooth and jitter-free
-  swirlSmooth.lerp(dest,     LERP_STAGE1);
-  swirlPos.lerp(swirlSmooth, LERP_STAGE2);
   
+  material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
+  material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
+
   // Render via composer for Bloom
   composer.render();
 }
@@ -605,29 +715,18 @@ window.addEventListener('resize', () => {
 const overlay = document.createElement('div');
 overlay.className = 'overlay';
 overlay.innerHTML = `
-  <h1>jaar aarkey </h1>
-  <div class="contact-links">
-    <a class="contact-link" href="mailto:olegudyachenko@gmail.com" aria-label="Email">
-      <span class="label">olegudyachenko@gmail.com</span>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="4" width="20" height="16" rx="2"/>
-        <polyline points="2,4 12,13 22,4"/>
-      </svg>
+  <h1>Swirl Theory</h1>
+
+  <nav class="contact-links">
+    <a href="mailto:olegudyachenko@gmail.com" title="Email" aria-label="Email">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg>
     </a>
-    <a class="contact-link" href="https://www.linkedin.com/in/oleg-dyachenko-287125b9/" target="_blank" rel="noopener" aria-label="LinkedIn">
-      <span class="label">LinkedIn</span>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
-        <rect x="2" y="9" width="4" height="12"/>
-        <circle cx="4" cy="4" r="2"/>
-      </svg>
+    <a href="https://www.linkedin.com/in/oleg-dyachenko-287125b9/" target="_blank" rel="noopener" title="LinkedIn" aria-label="LinkedIn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
     </a>
-    <a class="contact-link github-link" href="https://github.com/jaaraarkey" target="_blank" rel="noopener" aria-label="GitHub">
-      <span class="label">jaaraarkey</span>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 98 96" width="22" height="22" fill="currentColor">
-        <path d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z"/>
-      </svg>
+    <a href="https://github.com/jaaraarkey" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
     </a>
-  </div>
+  </nav>
 `;
 document.body.appendChild(overlay);
