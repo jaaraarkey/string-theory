@@ -175,7 +175,21 @@ p {
   border: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   transition: background 0.3s ease, box-shadow 0.3s ease, opacity 0.25s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-  animation: toggle-morph 9s ease-in-out infinite;
+  animation: toggle-morph 9s ease-in-out infinite, toggle-pulse 5.5s ease-in-out infinite;
+}
+
+@keyframes toggle-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 0 0 0 rgba(216, 216, 216, 0);
+  }
+
+  50% {
+    transform: scale(1.07);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22), 0 0 14px 6px rgba(216, 216, 216, 0.18);
+  }
 }
 
 @keyframes toggle-morph {
@@ -220,6 +234,7 @@ p {
 .mobile-bar__toggle.is-hidden {
   opacity: 0;
   transform: scale(0.6);
+  animation: none;
   pointer-events: none;
 }
 
