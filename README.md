@@ -1,20 +1,40 @@
 # Swirl Theory ✨
 
-A stunning, GPU-accelerated **swirl theory** visualization built with [Three.js](https://threejs.org/) and custom **GLSL shaders**, deployed to the web.
+A GPU-accelerated interactive visualization built with [Three.js](https://threejs.org/) and custom **GLSL shaders**.
 
-Inspired by the theoretical physics concept where fundamental particles are modeled as one-dimensional, vibrating strings of energy existing in multiple hidden dimensions, this animation recreates that concept as an interactive, evolving cosmic artwork.
+Two animations live inside — **Swirl Theory** and **String Theory** — toggled by clicking the title. Inspired by theoretical physics: particles as vibrating one-dimensional strings existing in hidden dimensions, rendered as an evolving cosmic artwork.
 
 ---
 
-## 🌌 Features
+## 🌌 Animations
 
-- **Custom GLSL Vertex & Fragment Shaders** — All animation and physics runs natively on the GPU, ensuring smooth 60 FPS performance
-- **Slow, Evolving Motion** — Strings drift, vibrate, and tumble with a gentle, meditative pace
-- **Full 3D Rotation** — The entire structure slowly and randomly rotates around all three axes (X, Y, Z)
-- **Interactive Mouse Vortex** — Moving your cursor through the strings pulls the particles into a swirling, glowing vortex with vivid colors
-- **Atmospheric Glow** — Gaussian falloff glow on every particle creates a soft, volumetric light effect
-- **Multi-Color Palette** — Deep ocean blues, dark purples, bright cyans, electric blue pulses, white-yellow highlights, salmon, and soft green tints all evolve slowly through the system
-- **Bloom Post-Processing** — Three.js `UnrealBloomPass` gives the strings an ethereal, energetic glow against the dark cosmos
+### Swirl Theory *(default)*
+Logarithmic spiral arms revolve inward from the screen edges toward the pointer. The swirl follows your cursor in real time, teleports on click with a fade-out/snap/fade-in transition, and fires a ripple shockwave that displaces the field with a coloured gradient ring (Neon Pink → Indigo → Royal → Sapphire → Sky Aqua).
+
+When idle the swirl slowly sinks toward the nav icons and orbits them. On scroll it lifts upward then drifts back.
+
+### String Theory *(click the title to toggle)*
+The original animation: a dense sphere of vibrating dotted strings built from custom GLSL shaders. Strings drift and tumble in full 3D rotation across all axes with subtle quantum-jitter vibrations. Moving your cursor pulls nearby particles into a swirling vortex of colour.
+
+---
+
+## 🎨 Features
+
+| Feature | Detail |
+|---|---|
+| **Dual animation modes** | Click the title to toggle Swirl Theory ↔ String Theory |
+| **Dark / Light theme** | Sun/moon button with a full-screen ripple colour transition |
+| **Mouse vortex** | Nearby particles swirl, brighten and burst into colour |
+| **Click ripple** | Shockwave ring expands from click point with palette gradient |
+| **Click teleport** | Swirl fades out, snaps, fades back in at the click position |
+| **Idle sink** | Swirl drifts to the nav icons after inactivity and orbits them |
+| **Touch inertia** | On mobile, releasing a flick sends the swirl coasting with velocity; gravity pulls it downward until it sinks to the nav |
+| **Scroll lift** | Mouse wheel pushes the swirl upward with inertia |
+| **Bloom post-processing** | `UnrealBloomPass` gives an ethereal volumetric glow |
+| **Tiered performance** | Geometry density and pixel ratio scale by `hardwareConcurrency` |
+| **Mobile-adaptive zoom** | Camera zooms out automatically on mobile in String Theory mode |
+| **About panel** | Shown in light mode with clickable LinkedIn and GitHub links |
+| **Contact nav** | Desktop icon links; mobile hamburger drawer with ripple expand |
 
 ---
 
@@ -25,30 +45,25 @@ Inspired by the theoretical physics concept where fundamental particles are mode
 | **Vite** | Development build tool |
 | **TypeScript** | Type-safe application logic |
 | **Three.js** | 3D rendering and post-processing |
-| **GLSL Shaders** | GPU-accelerated physics and color |
+| **GLSL Shaders** | GPU-accelerated animation, physics and colour |
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v18+)
+- Node.js v18+
 
-### Installation
+### Install & run
 
 ```bash
-git clone https://github.com/jaaraarkey/swirl-theory.git
-cd swirl-theory
+git clone https://github.com/jaaraarkey/string-theory.git
+cd string-theory
 npm install
-```
-
-### Run locally
-
-```bash
 npm run dev
 ```
 
-Then open your browser and navigate to `http://localhost:5173`.
+Open `http://localhost:5173`.
 
 ### Build for production
 
@@ -58,28 +73,27 @@ npm run build
 
 ---
 
-## 🪐 Deployment — Internet Computer (ICP)
+## 🎮 Interaction
 
-This project is designed to be deployed to the **DFINITY Internet Computer** (ICP) as a decentralized asset canister, making it globally accessible without any centralized server.
-
-> Deployment steps via the `dfx` SDK coming soon.
-
----
-
-## 🎨 Interaction
-
-- **Move your mouse** across the canvas to create a gravitational vortex — nearby particles will swirl, glow brighter, and burst into vivid salmon and purple.
-- The animation runs autonomously without any interaction, evolving slowly over time.
+| Input | Effect |
+|---|---|
+| **Move mouse / touch-drag** | Swirl follows the pointer; nearby strings swirl into a vortex |
+| **Click / tap** | Swirl teleports to the click point + ripple shockwave |
+| **Release touch flick** | Swirl coasts on velocity, arcs downward, sinks to nav |
+| **Scroll wheel** | Lifts the swirl upward with inertia |
+| **Click title** | Toggles between Swirl Theory and String Theory animations |
+| **Sun/moon button** | Toggles dark and light theme with ripple transition |
+| **Mobile circle button** | Opens contact drawer (LinkedIn, GitHub) |
 
 ---
 
 ## 📂 Project Structure
 
 ```
-swirl-theory/
+string-theory/
 ├── src/
-│   ├── main.ts        # Three.js scene + GLSL shaders
-│   └── style.css      # Full-screen canvas styles
+│   ├── main.ts        # Three.js scene, GLSL shaders, interaction logic
+│   └── style.css      # Layout, themes, animations
 ├── index.html         # Entry point
 ├── vite.config.ts     # Vite configuration
 ├── tsconfig.json      # TypeScript configuration

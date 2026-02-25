@@ -35,6 +35,9 @@ const composer = new EffectComposer(renderer);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
+// Bloom is expensive (5 internal passes) — skip it entirely on low-end GPUs
+if (isLowEnd) bloomPass.enabled = false;
+
 // Swirl Theory Geometry setup - Converting to Dotted Lines / Particles
 // Tiered geometry density based on device capability
 const STRINGS_COUNT      = isLowEnd ? 350 : isMidRange ? 520 : 700;
@@ -275,8 +278,8 @@ const material = new THREE.ShaderMaterial({
 
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
 // Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = 100;   // number of spiral arms
-const SWIRL_PTS     = 70;   // points per arm
+const SWIRL_ARMS    = isLowEnd ? 50 : isMidRange ? 75 : 100;   // tiered arm count
+const SWIRL_PTS     = isLowEnd ? 45 : isMidRange ? 58 : 70;    // tiered points per arm
 const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
@@ -800,9 +803,15 @@ window.addEventListener('pointerdown', (event) => {
 // Animation Loop
 const clock = new THREE.Clock();
 
-function animate() {
+// 30fps cap on low-end devices to reduce CPU/GPU pressure
+const MIN_FRAME_MS = isLowEnd ? 1000 / 30 : 0;
+let   lastFrameMs  = 0;
+
+function animate(nowMs: number = 0) {
   requestAnimationFrame(animate);
-  
+  if (MIN_FRAME_MS > 0 && nowMs - lastFrameMs < MIN_FRAME_MS) return;
+  lastFrameMs = nowMs;
+
   const elapsedTime = clock.getElapsedTime();
   material.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uTime.value = elapsedTime;
