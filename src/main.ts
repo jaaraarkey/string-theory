@@ -449,6 +449,168 @@ const flamePoints = new THREE.LineSegments(flameGeo, flameMaterial);
 scene.add(flamePoints);
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── STRING THEORY (original) — sphere of vibrating dotted strings ────────────
+const ST_STRINGS_COUNT  = isLowEnd ? 350 : isMidRange ? 500 : 700;
+const ST_POINTS_PER_STR = isLowEnd ?  50 : isMidRange ?  60 : 70;
+const ST_TOTAL_VERTS    = ST_STRINGS_COUNT * ST_POINTS_PER_STR;
+
+const stPositions = new Float32Array(ST_TOTAL_VERTS * 3);
+const stUvs       = new Float32Array(ST_TOTAL_VERTS * 2);
+const stRandoms   = new Float32Array(ST_TOTAL_VERTS * 3);
+
+let stVtx = 0;
+for (let i = 0; i < ST_STRINGS_COUNT; i++) {
+  const rX = Math.random(), rY = Math.random(), rZ = Math.random();
+  for (let j = 0; j < ST_POINTS_PER_STR; j++) {
+    const t = j / (ST_POINTS_PER_STR - 1);
+    stUvs[stVtx * 2]     = t;
+    stUvs[stVtx * 2 + 1] = i;
+    stRandoms[stVtx * 3]     = rX;
+    stRandoms[stVtx * 3 + 1] = rY;
+    stRandoms[stVtx * 3 + 2] = rZ;
+    stVtx++;
+  }
+}
+
+const stGeo = new THREE.BufferGeometry();
+stGeo.setAttribute('position', new THREE.BufferAttribute(stPositions, 3));
+stGeo.setAttribute('uv',       new THREE.BufferAttribute(stUvs, 2));
+stGeo.setAttribute('aRandom',  new THREE.BufferAttribute(stRandoms, 3));
+
+const stVertexShader = `
+  uniform float uTime;
+  uniform vec3  uMouse;
+  attribute vec3 aRandom;
+  varying vec3  vColor;
+  varying float vOpacity;
+
+  void main() {
+    float tAlong   = uv.x;
+    float stringId = uv.y;
+    float flowTime = uTime * 0.015;
+
+    float radius = 25.0 + aRandom.z * 20.0;
+    float theta  = aRandom.x * 6.2831;
+    float phi    = acos(aRandom.y * 2.0 - 1.0);
+    vec3 origin  = vec3(sin(phi)*cos(theta), sin(phi)*sin(theta), cos(phi)) * radius;
+
+    origin.x += sin(flowTime + aRandom.y * 10.0) * 10.0;
+    origin.y += cos(flowTime * 1.2 + aRandom.z * 10.0) * 10.0;
+    origin.z += sin(flowTime * 0.8 + aRandom.x * 10.0) * 10.0;
+
+    float len    = 20.0 + aRandom.x * 15.0;
+    float localT = tAlong - 0.5;
+    vec3 path = vec3(
+      sin(origin.y * 0.1 + localT * 3.0 + flowTime * 2.0) * len,
+      cos(origin.x * 0.1 + localT * 2.5 - flowTime * 1.5) * len,
+      sin(origin.z * 0.1 - localT * 3.5 + flowTime * 2.5) * len
+    );
+    vec3 basePos = origin + path;
+
+    float rotX = uTime * 0.007 + sin(uTime * 0.002) * 0.5;
+    float rotY = uTime * 0.005 + cos(uTime * 0.003) * 0.5;
+    float rotZ = uTime * 0.009;
+    mat3 mX = mat3(1,0,0, 0,cos(rotX),-sin(rotX), 0,sin(rotX),cos(rotX));
+    mat3 mY = mat3(cos(rotY),0,sin(rotY), 0,1,0, -sin(rotY),0,cos(rotY));
+    mat3 mZ = mat3(cos(rotZ),-sin(rotZ),0, sin(rotZ),cos(rotZ),0, 0,0,1);
+    vec3 finalPos = mZ * mY * mX * basePos;
+
+    float microFreq = 15.0 + aRandom.y * 10.0;
+    float microAmp  = 0.5  + aRandom.z * 1.5;
+    vec3 microOffset = vec3(
+      sin(tAlong * microFreq + uTime * 1.0 + aRandom.x * 6.28),
+      cos(tAlong * microFreq * 1.1 - uTime * 0.8 + aRandom.y * 6.28),
+      sin(tAlong * microFreq * 0.9 + uTime * 1.2 + aRandom.z * 6.28)
+    ) * microAmp;
+    float taper = sin(tAlong * 3.14159);
+    finalPos += microOffset * taper;
+
+    float distToMouse     = distance(finalPos, uMouse);
+    float interactionForce = smoothstep(40.0, 0.0, distToMouse);
+    vec3 toMouse   = normalize(uMouse - finalPos);
+    vec3 swirlAxis = normalize(vec3(sin(uTime * 0.2), cos(uTime * 0.2), 1.0));
+    vec3 swirlForce = cross(toMouse, swirlAxis);
+    finalPos += toMouse   * interactionForce * 9.0 * aRandom.x;
+    finalPos += swirlForce * interactionForce * 12.0;
+    finalPos += microOffset * interactionForce * 3.0;
+
+    vec4 mvPosition = viewMatrix * vec4(finalPos, 1.0);
+    gl_Position  = projectionMatrix * mvPosition;
+    gl_PointSize = (75.0 / -mvPosition.z) * (0.5 + taper * 1.5 + interactionForce * 3.0);
+
+    // Colors — original string theory palette
+    vec3 colorA = vec3(0.05, 0.1, 0.6);
+    vec3 colorB = vec3(0.2,  0.1, 0.3);
+    vec3 colorC = vec3(0.0,  0.6, 0.75);
+    vec3 colorD = vec3(1.0,  0.95,0.6);
+    vec3 colorE = vec3(0.0,  0.05,0.3);
+    vec3 colorF = vec3(0.0,  0.4, 1.0);
+    vec3 colorG = vec3(0.5,  1.0, 0.5);
+    vec3 swirlColorA = vec3(0.65, 0.28, 0.28);
+    vec3 swirlColorB = vec3(0.30, 0.15, 0.38);
+
+    float mixVal = sin(stringId * 0.01 + flowTime * 0.5) * 0.5 + 0.5;
+    vec3 baseColor = mix(colorA, colorB, mixVal);
+    float mixVal2  = sin(stringId * 0.02 - flowTime * 0.3) * 0.5 + 0.5;
+    baseColor = mix(baseColor, colorE, mixVal2 * 0.4);
+    float highlight = pow(max(0.0, sin(tAlong * 10.0 + flowTime)), 8.0);
+    baseColor = mix(baseColor, colorC, highlight * 0.35);
+    float vortexHeat = sin(tAlong * 5.0 + uTime * 2.0 + stringId) * 0.5 + 0.5;
+    vec3 activeColor = mix(swirlColorA, swirlColorB, vortexHeat);
+    vColor = mix(baseColor, activeColor, interactionForce * 0.75);
+
+    float flash = sin(stringId * 0.05 + uTime * 1.8) * 0.5 + 0.5;
+    float depthFade = smoothstep(50.0, -80.0, mvPosition.z);
+    vOpacity = taper * depthFade * (0.2 + 0.8 * flash) + interactionForce;
+  }
+`;
+
+const stFragmentShader = `
+  varying vec3  vColor;
+  varying float vOpacity;
+  void main() {
+    vec2  cxy = 2.0 * gl_PointCoord - 1.0;
+    float r   = dot(cxy, cxy);
+    if (r > 1.0) discard;
+    float softGlow = exp(-r * 3.0);
+    float alpha    = softGlow * vOpacity;
+    vec3  glowColor = vColor * (1.0 + softGlow * 0.5);
+    gl_FragColor = vec4(glowColor, alpha);
+  }
+`;
+
+const stMaterial = new THREE.ShaderMaterial({
+  vertexShader:   stVertexShader,
+  fragmentShader: stFragmentShader,
+  uniforms: {
+    uTime:  { value: 0 },
+    uMouse: { value: new THREE.Vector3(0, 0, -200) },
+  },
+  transparent: true,
+  depthWrite:  false,
+  blending:    THREE.AdditiveBlending,
+});
+
+const stPoints = new THREE.Points(stGeo, stMaterial);
+stPoints.visible = false; // hidden until toggled on
+scene.add(stPoints);
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Animation mode toggle ────────────────────────────────────────────────────
+let isStringTheoryMode = false;
+
+function setAnimationMode(stringTheory: boolean) {
+  isStringTheoryMode = stringTheory;
+  flamePoints.visible = !stringTheory;
+  stPoints.visible    =  stringTheory;
+
+  document.body.classList.toggle('string-theory', stringTheory);
+
+  const h1 = document.querySelector('.overlay h1') as HTMLElement | null;
+  if (h1) h1.textContent = stringTheory ? 'String Theory' : 'Swirl Theory';
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Mouse Interaction Setup
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(-999, -999);
@@ -615,6 +777,8 @@ function animate() {
   const elapsedTime = clock.getElapsedTime();
   material.uniforms.uTime.value = elapsedTime;
   flameMaterial.uniforms.uTime.value = elapsedTime;
+  stMaterial.uniforms.uTime.value = elapsedTime;
+  stMaterial.uniforms.uMouse.value.lerp(targetMouse, 0.05);
   flameMaterial.uniforms.uCenter.value.copy(material.uniforms.uCenter.value);
 
   // Update ripple age; deactivate once it has fully expanded
@@ -770,6 +934,12 @@ overlay.innerHTML = `
   </nav>
 `;
 document.body.appendChild(overlay);
+
+// Wire h1 click → toggle animation mode
+const overlayH1 = overlay.querySelector('h1') as HTMLElement;
+overlayH1.addEventListener('click', () => {
+  setAnimationMode(!isStringTheoryMode);
+});
 
 // ── Mobile sandwich bar ──────────────────────────────────────────────────────
 const mobileBar = document.createElement('div');
