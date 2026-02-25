@@ -626,6 +626,12 @@ const prevPointerWorld = new THREE.Vector3(0, 0, 0);
 // How far below the pointer the swirl center sits (world units)
 const SWIRL_Y_OFFSET = -12;  // constant downward bias
 
+// Touch-release inertia
+const touchCoastVel = new THREE.Vector3();  // world-units per frame at release
+let   isTouchCoasting = false;
+const TOUCH_FRICTION  = 0.88;              // velocity multiplier per frame
+const TOUCH_STOP_THRESHOLD = 0.04;         // world units/frame below which coast ends
+
 // Scroll-driven Y lift: wheel events push the swirl upward like it's attached to the page
 let scrollWorldY = 0;        // accumulated world-unit scroll offset
 let scrollVelY   = 0;        // inertia velocity (decays each frame)
@@ -726,16 +732,29 @@ window.addEventListener('pointermove', (event) => {
   );
 
   // Update resting position — swirl center sits SWIRL_Y_OFFSET units below the pointer
-  const pointerSpeed = targetMouse.distanceTo(prevPointerWorld);
+  const pointerDelta = targetMouse.clone().sub(prevPointerWorld);
+  const pointerSpeed = pointerDelta.length();
+  // Rolling average velocity (for touch-release inertia)
+  touchCoastVel.lerp(pointerDelta, 0.35);
   prevPointerWorld.copy(targetMouse);
   // Extra dynamic droop: faster movement = swirl lags further down (capped)
   const dynamicDroop = Math.min(pointerSpeed * 1.2, 8);
   const targetY = targetMouse.y + SWIRL_Y_OFFSET - dynamicDroop;
   pointerRest.set(targetMouse.x, targetY, 0);
   swirlCenterTarget.copy(pointerRest);
-  isArrived  = false;
-  isSinking  = false;
-  isResting  = false;
+  isArrived      = false;
+  isSinking      = false;
+  isResting      = false;
+  isTouchCoasting = false;
+  lastMoveTime   = Date.now();
+});
+
+window.addEventListener('pointerup', (event) => {
+  // Only apply touch-release inertia for actual touch input
+  if (event.pointerType !== 'touch') return;
+  if (touchCoastVel.length() < TOUCH_STOP_THRESHOLD) return;
+  isTouchCoasting = true;
+  // Extend idle timer so coast plays out before sink kicks in
   lastMoveTime = Date.now();
 });
 
@@ -762,9 +781,11 @@ window.addEventListener('pointerdown', (event) => {
   teleportStartTime = clock.getElapsedTime();
 
   // Wake swirl up — cancel any sink/rest so it follows after arriving
-  isSinking  = false;
-  isResting  = false;
-  isArrived  = false;
+  isSinking       = false;
+  isResting       = false;
+  isArrived       = false;
+  isTouchCoasting = false;
+  touchCoastVel.set(0, 0, 0);
   lastMoveTime = Date.now();
 });
 
@@ -830,6 +851,25 @@ function animate() {
       navPos.y + Math.sin(orbitAngle) * orbitRadius,
       0
     );
+  } else if (isTouchCoasting) {
+    // Advance target by decaying touch velocity then chase it normally
+    touchCoastVel.multiplyScalar(TOUCH_FRICTION);
+    swirlCenterTarget.add(touchCoastVel);
+    pointerRest.copy(swirlCenterTarget);
+    // Keep idle timer alive so sink doesn't interrupt the coast
+    lastMoveTime = Date.now();
+
+    // Lerp swirl toward the advancing target
+    const scrolledTarget = swirlCenterTarget.clone();
+    scrolledTarget.y += scrollWorldY;
+    const dist = swirlPos.distanceTo(scrolledTarget);
+    const lerpFactor = Math.min(0.0012, 0.00015 * dist + 0.00006);
+    swirlPos.lerp(scrolledTarget, lerpFactor);
+
+    if (touchCoastVel.length() < TOUCH_STOP_THRESHOLD) {
+      isTouchCoasting = false;
+      isArrived       = false;
+    }
   } else if (isSinking) {
     const navPos = getNavWorldPos();
     const sinkAge = elapsedTime - sinkStartTime;
