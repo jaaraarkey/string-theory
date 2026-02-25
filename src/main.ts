@@ -17,7 +17,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 // Adaptive pixel ratio: cap lower on weak devices (low CPU count = likely mobile/low-end)
 const isLowEnd = navigator.hardwareConcurrency <= 4;
 const isMidRange = navigator.hardwareConcurrency <= 8;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowEnd ? 1 : isMidRange ? 1.5 : 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowEnd ? 1 : isMidRange ? 2 : 2));
 document.getElementById('app')?.appendChild(renderer.domElement);
 
 // Post-Processing (Bloom for the Ethereal Glow)
@@ -26,9 +26,9 @@ const renderScene = new RenderPass(scene, camera);
 const bloomRes = new THREE.Vector2(Math.round(window.innerWidth * 0.5), Math.round(window.innerHeight * 0.5));
 const bloomPass = new UnrealBloomPass(
   bloomRes,
-  2.5,  // strength
-  0.9,  // radius
-  0.1   // threshold
+  3.2,  // strength
+  1.0,  // radius
+  0.05  // threshold
 );
 
 const composer = new EffectComposer(renderer);
@@ -40,8 +40,8 @@ if (isLowEnd) bloomPass.enabled = false;
 
 // Swirl Theory Geometry setup - Converting to Dotted Lines / Particles
 // Tiered geometry density based on device capability
-const STRINGS_COUNT      = isLowEnd ? 350 : isMidRange ? 520 : 700;
-const POINTS_PER_STRING  = isLowEnd ? 50  : isMidRange ? 65  : 80;
+const STRINGS_COUNT      = isLowEnd ? 350 : 950;
+const POINTS_PER_STRING  = isLowEnd ? 50  : 100;
 const SEGS_PER_STRING = POINTS_PER_STRING - 1; // segments between consecutive points
 const TOTAL_VERTICES = STRINGS_COUNT * SEGS_PER_STRING * 2; // 2 verts per segment
 
@@ -278,8 +278,8 @@ const material = new THREE.ShaderMaterial({
 
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
 // Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = isLowEnd ? 50 : isMidRange ? 75 : 100;   // tiered arm count
-const SWIRL_PTS     = isLowEnd ? 45 : isMidRange ? 58 : 70;    // tiered points per arm
+const SWIRL_ARMS    = isLowEnd ? 50 : 150;   // tiered arm count
+const SWIRL_PTS     = isLowEnd ? 45 : 100;   // tiered points per arm
 const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
@@ -328,13 +328,13 @@ const flameVertexShader = `
     float spiralTurns = 1.8;
     float angle = armAngle + t * spiralTurns * 6.2831;
 
-    float outerR = 72.0 + aRandom.y * 20.0;
+    float outerR = 90.0 + aRandom.y * 28.0;
     float innerR = 4.0  + aRandom.y * 8.0;
     float radius  = mix(innerR, outerR, t);
 
     vec2 spiralXY = vec2(cos(angle), sin(angle)) * radius;
 
-    float wispAmp = t * 3.5;
+    float wispAmp = t * 6.5;
     float wispFreq = 3.0 + aRandom.z * 2.0;
     vec2 perp = vec2(-sin(angle), cos(angle));
     float wisp = sin(tAlong * wispFreq * 6.28 + uTime * 0.8 + aRandom.z * 6.28) * wispAmp;
@@ -372,7 +372,7 @@ const flameVertexShader = `
     float edgeFade  = smoothstep(0.0, 0.18, tAlong);
     float coreFade  = smoothstep(0.0, 0.12, t);
     float shimmer   = 0.55 + 0.45 * sin(tAlong * 10.0 + uTime * 1.2 + aRandom.z * 6.28);
-    vFlameOpacity   = edgeFade * coreFade * shimmer * 0.22;
+    vFlameOpacity   = edgeFade * coreFade * shimmer * 0.38;
     vT = tAlong;
 
     // Ripple colour influence — peaks right on the wave ring, fades out
@@ -453,8 +453,8 @@ scene.add(flamePoints);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── STRING THEORY (original) — sphere of vibrating dotted strings ────────────
-const ST_STRINGS_COUNT  = isLowEnd ? 350 : isMidRange ? 500 : 700;
-const ST_POINTS_PER_STR = isLowEnd ?  50 : isMidRange ?  60 : 70;
+const ST_STRINGS_COUNT  = isLowEnd ? 350 : 950;
+const ST_POINTS_PER_STR = isLowEnd ?  50 : 100;
 const ST_TOTAL_VERTS    = ST_STRINGS_COUNT * ST_POINTS_PER_STR;
 
 const stPositions = new Float32Array(ST_TOTAL_VERTS * 3);
@@ -539,7 +539,7 @@ const stVertexShader = `
 
     vec4 mvPosition = viewMatrix * vec4(finalPos, 1.0);
     gl_Position  = projectionMatrix * mvPosition;
-    gl_PointSize = (75.0 / -mvPosition.z) * (0.5 + taper * 1.5 + interactionForce * 3.0);
+    gl_PointSize = (110.0 / -mvPosition.z) * (0.5 + taper * 1.5 + interactionForce * 3.0);
 
     // Colors — original string theory palette
     vec3 colorA = vec3(0.05, 0.1, 0.6);
@@ -606,7 +606,11 @@ let isStringTheoryMode = false;
 let cameraTargetZ = 45;
 function updateCameraTargetZ() {
   const isMobile = window.innerWidth < 768;
-  cameraTargetZ = isStringTheoryMode && isMobile ? 72 : 45;
+  if (isStringTheoryMode) {
+    cameraTargetZ = isMobile ? 72 : 45;
+  } else {
+    cameraTargetZ = isMobile ? 62 : 45;
+  }
 }
 
 function setAnimationMode(stringTheory: boolean) {
