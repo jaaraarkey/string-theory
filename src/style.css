@@ -102,6 +102,7 @@ body.light p {
 /* About bio — hidden in dark mode, shown in light mode */
 .about-bio {
   display: none;
+  margin-top: 256px;
 }
 
 body.light .about-bio {
@@ -114,16 +115,16 @@ body.light .about-bio {
 
 .about-bio__greeting {
   font-size: 2rem;
-  font-weight: 600;
-  color: #111;
+  font-weight: 700;
+  color: #0a0a0a;
   margin: 0;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .about-bio__lines {
   font-size: 1.2rem;
-  font-weight: 300;
-  color: rgba(0, 0, 0, 0.55);
+  font-weight: 400;
+  color: rgba(0, 0, 0, 0.75);
   margin: 0;
   line-height: 1.7;
   letter-spacing: 0.01em;
@@ -258,6 +259,10 @@ body.light .contact-links a:hover {
     text-align: left;
   }
 
+  body.light .about-bio {
+    margin-top: 140px;
+  }
+
   /* Hide desktop links, show mobile bar */
   .contact-links {
     display: none;
@@ -285,6 +290,18 @@ body.light .contact-links a:hover {
   p {
     font-size: 0.85rem;
     margin-top: 0.4rem;
+  }
+
+  /* Light mode: centre bio vertically, pin to left edge */
+  body.light .overlay {
+    justify-content: center;
+    align-items: flex-start;
+    padding: 20px 24px;
+    text-align: left;
+  }
+
+  body.light .about-bio {
+    margin-top: 0;
   }
 
   /* Hide desktop links, show mobile bar */
