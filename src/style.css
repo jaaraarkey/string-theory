@@ -96,7 +96,7 @@ body.light h1 {
 }
 
 body.light p {
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(0, 0, 0, 0.8);
 }
 
 /* About bio — hidden in dark mode, shown in light mode */
@@ -132,7 +132,7 @@ body.light .about-bio {
 
 h1 {
   font-size: 3rem;
-  font-weight: 100;
+  font-weight: 300;
   letter-spacing: 0.8rem;
   margin: 0;
   text-transform: uppercase;
@@ -140,7 +140,8 @@ h1 {
 
 p {
   font-size: 1.2rem;
-  color: rgba(255, 255, 255, 0.7);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
   letter-spacing: 0.04rem;
   margin-top: 1rem;
 }

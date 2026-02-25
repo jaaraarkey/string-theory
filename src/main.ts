@@ -505,19 +505,33 @@ function computeBottomWorldY(): number {
 }
 
 function getNavWorldPos(): THREE.Vector3 {
-  // Get the screen-space center of the contact-links nav and unproject to world Z=0
-  const nav = document.querySelector('.contact-links');
-  if (!nav) return new THREE.Vector3(0, computeBottomWorldY(), 0);
-  const rect = nav.getBoundingClientRect();
-  const cx = rect.left + rect.width  / 2;
-  const cy = rect.top  + rect.height / 2;
-  // NDC
-  const ndcX =  (cx / window.innerWidth)  * 2 - 1;
-  const ndcY = -(cy / window.innerHeight) * 2 + 1;
-  // Unproject: at z=0 plane, camera at z=45
-  const halfH = Math.tan((60 * Math.PI / 180) / 2) * 45;
-  const halfW = halfH * (window.innerWidth / window.innerHeight);
-  return new THREE.Vector3(ndcX * halfW, ndcY * halfH, 0);
+  // Helper: unproject a screen-space point to world Z=0
+  function screenToWorld(cx: number, cy: number): THREE.Vector3 {
+    const ndcX =  (cx / window.innerWidth)  * 2 - 1;
+    const ndcY = -(cy / window.innerHeight) * 2 + 1;
+    const halfH = Math.tan((60 * Math.PI / 180) / 2) * 45;
+    const halfW = halfH * (window.innerWidth / window.innerHeight);
+    return new THREE.Vector3(ndcX * halfW, ndcY * halfH, 0);
+  }
+
+  // In landscape-mobile the contact-links are hidden and the mob-toggle is the anchor
+  const nav = document.querySelector('.contact-links') as HTMLElement | null;
+  const toggle = document.getElementById('mob-toggle') as HTMLElement | null;
+  const navHidden = nav ? getComputedStyle(nav).display === 'none' : true;
+
+  if (!navHidden && nav) {
+    // Desktop / landscape-desktop: use contact-links centre
+    const rect = nav.getBoundingClientRect();
+    return screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  if (toggle) {
+    // Mobile (portrait or landscape): use the toggle circle centre
+    const rect = toggle.getBoundingClientRect();
+    return screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  return new THREE.Vector3(0, computeBottomWorldY(), 0);
 }
 
 function startSink() {
@@ -741,7 +755,7 @@ overlay.innerHTML = `
 
   <div class="about-bio">
     <p class="about-bio__greeting">Hi, I'm Oleg aka Jaar.</p>
-    <p class="about-bio__lines">Developer. Graphic designer.<br>Creative edge. Analytical core.<br>Rust + JS. Built to iterate.</p>
+    <p class="about-bio__lines">Developer. Graphic designer.<br>Creative edge. Analytical core.<br>Rust + JS. Built to iterate. <br/>Feel free to reach out via Linkedin or GitHub!</p>
   </div>
 
   <nav class="contact-links">
