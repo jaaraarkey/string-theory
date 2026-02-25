@@ -856,16 +856,20 @@ themeBtn.setAttribute('aria-label', 'Toggle light / dark theme');
 themeBtn.innerHTML = sunSVG;
 document.body.appendChild(themeBtn);
 
+const overlayH1 = document.querySelector('.overlay h1') as HTMLElement;
+
 function applyTheme(light: boolean) {
   isLight = light;
   if (light) {
     document.body.classList.add('light');
     document.documentElement.style.colorScheme = 'light';
     themeBtn.innerHTML = moonSVG;
+    if (overlayH1) overlayH1.textContent = 'about:';
   } else {
     document.body.classList.remove('light');
     document.documentElement.style.colorScheme = 'dark';
     themeBtn.innerHTML = sunSVG;
+    if (overlayH1) overlayH1.textContent = 'Swirl Theory';
   }
 }
 

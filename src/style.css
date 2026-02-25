@@ -88,6 +88,14 @@ canvas {
 body.light .overlay {
   color: #111;
   text-shadow: none;
+  padding: 20px 24px;
+}
+
+body.light h1 {
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: none;
 }
 
 body.light p {
