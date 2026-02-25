@@ -27,15 +27,17 @@ body.light canvas {
 /* ── Theme toggle button ─────────────────────────────────────────────────── */
 .theme-btn {
   position: fixed;
-  top: 20px;
-  right: 24px;
+  top: 10px;
+  right: 14px;
   z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 10px;
   cursor: pointer;
   color: #fff;
   pointer-events: all;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .theme-btn svg {
@@ -81,8 +83,8 @@ canvas {
   padding: 64px;
   box-sizing: border-box;
   color: white;
-  text-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 40px rgba(255, 0, 255, 0.4);
-  transition: color 0.5s ease, text-shadow 0.5s ease;
+  text-shadow: none;
+  transition: color 0.5s ease;
 }
 
 body.light .overlay {
@@ -124,7 +126,7 @@ body.light .about-bio {
 .about-bio__lines {
   font-size: 1.2rem;
   font-weight: 400;
-  color: rgba(0, 0, 0, 0.75);
+  color: rgba(0, 0, 0, 0.88);
   margin: 0;
   line-height: 1.7;
   letter-spacing: 0.01em;
@@ -136,14 +138,16 @@ h1 {
   letter-spacing: 0.8rem;
   margin: 0;
   text-transform: uppercase;
+  text-shadow: 0 0 24px rgba(76, 201, 240, 0.45), 0 0 48px rgba(114, 9, 183, 0.25);
 }
 
 p {
   font-size: 1.2rem;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.95);
   letter-spacing: 0.04rem;
   margin-top: 1rem;
+  text-shadow: none;
 }
 
 .contact-links {
@@ -538,5 +542,42 @@ body.light .mobile-bar__drawer a:active {
   100% {
     transform: scale(calc(var(--ripple-size) / 56px));
     opacity: 1;
+  }
+}
+
+/* ── Theme circular reveal ──────────────────────────────────────────────── */
+#theme-ripple {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999999;
+  clip-path: circle(0% at var(--trx, 50%) var(--try, 50%));
+}
+
+#theme-ripple.is-expanding {
+  animation: theme-ripple-expand 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+#theme-ripple.is-collapsing {
+  animation: theme-ripple-collapse 0.34s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes theme-ripple-expand {
+  0% {
+    clip-path: circle(0% at var(--trx) var(--try));
+  }
+
+  100% {
+    clip-path: circle(150% at var(--trx) var(--try));
+  }
+}
+
+@keyframes theme-ripple-collapse {
+  0% {
+    clip-path: circle(150% at var(--trx) var(--try));
+  }
+
+  100% {
+    clip-path: circle(0% at var(--trx) var(--try));
   }
 }

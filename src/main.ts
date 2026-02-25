@@ -875,20 +875,55 @@ themeBtn.setAttribute('aria-label', 'Toggle light / dark theme');
 themeBtn.innerHTML = sunSVG;
 document.body.appendChild(themeBtn);
 
+// ── Theme transition ripple ───────────────────────────────────────────────────
+const themeRipple = document.createElement('div');
+themeRipple.id = 'theme-ripple';
+document.body.appendChild(themeRipple);
+
 function applyTheme(light: boolean) {
-  isLight = light;
-  if (light) {
-    document.body.classList.add('light');
-    document.documentElement.style.colorScheme = 'light';
-    themeBtn.innerHTML = moonSVG;
-  } else {
-    document.body.classList.remove('light');
-    document.documentElement.style.colorScheme = 'dark';
-    themeBtn.innerHTML = sunSVG;
-  }
+  // Get icon centre for ripple origin
+  const rect = themeBtn.getBoundingClientRect();
+  const cx = rect.left + rect.width  / 2;
+  const cy = rect.top  + rect.height / 2;
+
+  // Ripple colour = the colour of the destination theme
+  themeRipple.style.background = light ? '#ffffff' : '#000000';
+  themeRipple.style.setProperty('--trx', `${cx}px`);
+  themeRipple.style.setProperty('--try', `${cy}px`);
+
+  // Reset then trigger expansion
+  themeRipple.classList.remove('is-expanding', 'is-collapsing');
+  void themeRipple.offsetWidth; // force reflow
+  themeRipple.classList.add('is-expanding');
+
+  // At peak (circle covers screen) apply the theme and icon
+  const MID = 380;
+  setTimeout(() => {
+    isLight = light;
+    if (light) {
+      document.body.classList.add('light');
+      document.documentElement.style.colorScheme = 'light';
+      themeBtn.innerHTML = moonSVG;
+    } else {
+      document.body.classList.remove('light');
+      document.documentElement.style.colorScheme = 'dark';
+      themeBtn.innerHTML = sunSVG;
+    }
+    // Collapse ripple away
+    themeRipple.classList.remove('is-expanding');
+    themeRipple.classList.add('is-collapsing');
+  }, MID);
+
+  setTimeout(() => {
+    themeRipple.classList.remove('is-collapsing');
+  }, MID + 340);
 }
 
 // Initialise renderer clear colour (always dark — light theme uses CSS invert)
 renderer.setClearColor(DARK_BG, 1);
 
-themeBtn.addEventListener('click', () => applyTheme(!isLight));
+themeBtn.addEventListener('click', () => {
+  if (themeRipple.classList.contains('is-expanding') ||
+      themeRipple.classList.contains('is-collapsing')) return; // debounce mid-animation
+  applyTheme(!isLight);
+});
