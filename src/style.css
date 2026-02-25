@@ -223,6 +223,19 @@ body.light .contact-links a:hover {
     font-size: 1rem;
   }
 
+  /* Light mode: pin "about:" to top-left, matching moon icon insets */
+  body.light .overlay {
+    padding: 20px 24px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  body.light h1 {
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+
   /* Hide desktop links, show mobile bar */
   .contact-links {
     display: none;
