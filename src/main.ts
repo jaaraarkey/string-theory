@@ -937,7 +937,8 @@ document.body.appendChild(overlay);
 
 // Wire h1 click → toggle animation mode
 const overlayH1 = overlay.querySelector('h1') as HTMLElement;
-overlayH1.addEventListener('click', () => {
+overlayH1.addEventListener('click', (e) => {
+  e.stopPropagation(); // prevent document handler from closing the drawer
   setAnimationMode(!isStringTheoryMode);
 });
 
