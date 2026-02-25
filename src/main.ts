@@ -739,6 +739,11 @@ overlay.className = 'overlay';
 overlay.innerHTML = `
   <h1>Swirl Theory</h1>
 
+  <div class="about-bio">
+    <p class="about-bio__greeting">Hi, I'm Oleg aka Jaar.</p>
+    <p class="about-bio__lines">Developer. Graphic designer.<br>Creative edge. Analytical core.<br>Rust + JS. Built to iterate.</p>
+  </div>
+
   <nav class="contact-links">
     <a href="https://www.linkedin.com/in/oleg-dyachenko-287125b9/" target="_blank" rel="noopener" title="LinkedIn" aria-label="LinkedIn">
       <span class="link-label">Oleg Dyachenko</span>
@@ -856,20 +861,16 @@ themeBtn.setAttribute('aria-label', 'Toggle light / dark theme');
 themeBtn.innerHTML = sunSVG;
 document.body.appendChild(themeBtn);
 
-const overlayH1 = document.querySelector('.overlay h1') as HTMLElement;
-
 function applyTheme(light: boolean) {
   isLight = light;
   if (light) {
     document.body.classList.add('light');
     document.documentElement.style.colorScheme = 'light';
     themeBtn.innerHTML = moonSVG;
-    if (overlayH1) overlayH1.textContent = 'about:';
   } else {
     document.body.classList.remove('light');
     document.documentElement.style.colorScheme = 'dark';
     themeBtn.innerHTML = sunSVG;
-    if (overlayH1) overlayH1.textContent = 'Swirl Theory';
   }
 }
 

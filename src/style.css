@@ -92,14 +92,41 @@ body.light .overlay {
 }
 
 body.light h1 {
-  font-size: 18px;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-transform: none;
+  display: none;
 }
 
 body.light p {
   color: rgba(0, 0, 0, 0.6);
+}
+
+/* About bio — hidden in dark mode, shown in light mode */
+.about-bio {
+  display: none;
+}
+
+body.light .about-bio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0;
+  text-align: left;
+}
+
+.about-bio__greeting {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #111;
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.about-bio__lines {
+  font-size: 1.2rem;
+  font-weight: 300;
+  color: rgba(0, 0, 0, 0.55);
+  margin: 0;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
 }
 
 h1 {
@@ -223,17 +250,12 @@ body.light .contact-links a:hover {
     font-size: 1rem;
   }
 
-  /* Light mode: pin "about:" to top-left, matching moon icon insets */
+  /* Light mode: keep bio left-aligned */
   body.light .overlay {
     padding: 20px 24px;
     align-items: flex-start;
     justify-content: flex-start;
     text-align: left;
-  }
-
-  body.light h1 {
-    font-size: 18px;
-    letter-spacing: 0.08em;
   }
 
   /* Hide desktop links, show mobile bar */
