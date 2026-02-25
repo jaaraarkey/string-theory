@@ -599,12 +599,20 @@ scene.add(stPoints);
 // ─── Animation mode toggle ────────────────────────────────────────────────────
 let isStringTheoryMode = false;
 
+// Camera Z target — zooms out a bit on mobile when in string-theory mode
+let cameraTargetZ = 45;
+function updateCameraTargetZ() {
+  const isMobile = window.innerWidth < 768;
+  cameraTargetZ = isStringTheoryMode && isMobile ? 72 : 45;
+}
+
 function setAnimationMode(stringTheory: boolean) {
   isStringTheoryMode = stringTheory;
   flamePoints.visible = !stringTheory;
   stPoints.visible    =  stringTheory;
 
   document.body.classList.toggle('string-theory', stringTheory);
+  updateCameraTargetZ();
 
   const h1 = document.querySelector('.overlay h1') as HTMLElement | null;
   if (h1) h1.textContent = stringTheory ? 'String Theory' : 'Swirl Theory';
@@ -939,6 +947,9 @@ function animate() {
   material.uniforms.uMouse.value.lerp(targetMouse, 0.05);
   material.uniforms.uCenter.value.lerp(centerTarget, 0.008);
 
+  // Smoothly zoom camera in/out when switching modes
+  camera.position.z += (cameraTargetZ - camera.position.z) * 0.04;
+
   // Render via composer for Bloom
   composer.render();
 }
@@ -952,6 +963,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
   bloomPass.resolution.set(Math.round(window.innerWidth * 0.5), Math.round(window.innerHeight * 0.5));
+  updateCameraTargetZ();
 });
 
 // Update DOM to add a cool overlay title
