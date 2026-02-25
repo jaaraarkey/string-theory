@@ -33,28 +33,9 @@ body.light canvas {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.07);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.7);
-  transition:
-    background 0.4s ease,
-    border-color 0.4s ease,
-    color 0.4s ease,
-    box-shadow 0.4s ease;
-  pointer-events: all;
-}
-
-.theme-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.4);
   color: #fff;
-  box-shadow: 0 0 12px rgba(76, 201, 240, 0.35);
+  pointer-events: all;
 }
 
 .theme-btn svg {
@@ -63,18 +44,9 @@ body.light canvas {
   display: block;
 }
 
-/* Light-mode overrides */
+/* Light-mode: icon colour follows the inverted canvas text */
 body.light .theme-btn {
-  border-color: rgba(0, 0, 0, 0.15);
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.65);
-}
-
-body.light .theme-btn:hover {
-  background: rgba(0, 0, 0, 0.10);
-  border-color: rgba(0, 0, 0, 0.35);
   color: #000;
-  box-shadow: 0 0 12px rgba(114, 9, 183, 0.25);
 }
 
 #app {
@@ -161,7 +133,7 @@ p {
 }
 
 body.light .contact-links a {
-  color: rgba(0, 0, 0, 0.45);
+  color: #000;
 }
 
 body.light .contact-links a:hover {
@@ -225,6 +197,7 @@ body.light .contact-links a:hover {
   pointer-events: all;
 }
 
+/* ── Portrait mobile ──────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .overlay {
     padding: 16px;
@@ -249,6 +222,81 @@ body.light .contact-links a:hover {
 
   .mobile-bar {
     display: flex;
+  }
+}
+
+/* ── Landscape phone: keep mobile-bar, compact overlay ───────────────────── */
+@media (orientation: landscape) and (max-height: 500px) {
+  .overlay {
+    padding: 12px 20px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    letter-spacing: 0.5rem;
+  }
+
+  p {
+    font-size: 0.85rem;
+    margin-top: 0.4rem;
+  }
+
+  /* Hide desktop links, show mobile bar */
+  .contact-links {
+    display: none;
+  }
+
+  .mobile-bar {
+    display: flex;
+    /* shift to bottom-right to clear the compact text block */
+    bottom: 20px;
+  }
+
+  /* Drawer opens as a row in landscape to avoid vertical overflow */
+  .mobile-bar__drawer {
+    flex-direction: row;
+    gap: 14px;
+    max-height: none;
+    max-width: 0;
+    overflow: hidden;
+    padding: 0;
+    margin-bottom: 0;
+    margin-right: 0;
+    transition:
+      max-width 0.52s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.40s cubic-bezier(0.22, 1, 0.36, 1),
+      padding-left 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      padding-right 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+      margin-right 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .mobile-bar__drawer.is-open {
+    max-width: 300px;
+    max-height: none;
+    opacity: 1;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+    margin-bottom: 0;
+    margin-right: 10px;
+  }
+
+  .mobile-bar__drawer svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Horizontal layout: drawer sits to the left of the toggle */
+  .mobile-bar {
+    flex-direction: row-reverse;
+    bottom: 20px;
+    left: auto;
+    right: 24px;
+    transform: none;
   }
 }
 
@@ -327,6 +375,26 @@ body.light .contact-links a:hover {
   transform: scale(0.6);
   animation: none;
   pointer-events: none;
+}
+
+/* Invert drawer toggle & ripple in light mode, mirroring the canvas inversion */
+body.light .mobile-bar__toggle {
+  filter: invert(1);
+}
+
+body.light #mob-ripple {
+  filter: invert(1);
+}
+
+/* Light mode: drawer link icons black */
+body.light .mobile-bar__drawer a {
+  color: #000;
+}
+
+body.light .mobile-bar__drawer a:hover,
+body.light .mobile-bar__drawer a:active {
+  color: #222;
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.35));
 }
 
 /* Glassy pearl drawer */
