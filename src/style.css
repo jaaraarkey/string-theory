@@ -21,7 +21,7 @@ body.light {
 
 /* Invert the WebGL canvas so the animation looks identical but on a white ground */
 body.light canvas {
-  filter: invert(1);
+  filter: invert(1) hue-rotate(180deg);
 }
 
 /* ── Theme toggle button ─────────────────────────────────────────────────── */
