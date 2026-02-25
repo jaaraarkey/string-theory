@@ -629,8 +629,9 @@ const SWIRL_Y_OFFSET = -12;  // constant downward bias
 // Touch-release inertia
 const touchCoastVel = new THREE.Vector3();  // world-units per frame at release
 let   isTouchCoasting = false;
-const TOUCH_FRICTION  = 0.88;              // velocity multiplier per frame
-const TOUCH_STOP_THRESHOLD = 0.04;         // world units/frame below which coast ends
+const TOUCH_FRICTION       = 0.88;   // velocity multiplier per frame
+const TOUCH_STOP_THRESHOLD = 0.04;   // world units/frame below which coast ends
+const TOUCH_GRAVITY        = -0.018; // downward pull added to Y each frame after release
 
 // Scroll-driven Y lift: wheel events push the swirl upward like it's attached to the page
 let scrollWorldY = 0;        // accumulated world-unit scroll offset
@@ -752,7 +753,6 @@ window.addEventListener('pointermove', (event) => {
 window.addEventListener('pointerup', (event) => {
   // Only apply touch-release inertia for actual touch input
   if (event.pointerType !== 'touch') return;
-  if (touchCoastVel.length() < TOUCH_STOP_THRESHOLD) return;
   isTouchCoasting = true;
   // Extend idle timer so coast plays out before sink kicks in
   lastMoveTime = Date.now();
@@ -852,11 +852,12 @@ function animate() {
       0
     );
   } else if (isTouchCoasting) {
-    // Advance target by decaying touch velocity then chase it normally
+    // Apply gravity then decay velocity
+    touchCoastVel.y += TOUCH_GRAVITY;
     touchCoastVel.multiplyScalar(TOUCH_FRICTION);
     swirlCenterTarget.add(touchCoastVel);
     pointerRest.copy(swirlCenterTarget);
-    // Keep idle timer alive so sink doesn't interrupt the coast
+    // Keep idle timer alive so the normal sink timeout doesn't race with us
     lastMoveTime = Date.now();
 
     // Lerp swirl toward the advancing target
@@ -869,6 +870,8 @@ function animate() {
     if (touchCoastVel.length() < TOUCH_STOP_THRESHOLD) {
       isTouchCoasting = false;
       isArrived       = false;
+      // Hand off to sink so it pulls toward the nav button
+      startSink();
     }
   } else if (isSinking) {
     const navPos = getNavWorldPos();
