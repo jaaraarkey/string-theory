@@ -1,3 +1,8 @@
+:root {
+  color-scheme: dark;
+  /* always start dark, overridden to 'light' by JS when toggled */
+}
+
 body,
 html {
   margin: 0;
@@ -7,6 +12,69 @@ html {
   overflow: hidden;
   background-color: #000;
   font-family: 'Inter', sans-serif;
+  transition: background-color 0.5s ease;
+}
+
+body.light {
+  background-color: #fff;
+}
+
+/* Invert the WebGL canvas so the animation looks identical but on a white ground */
+body.light canvas {
+  filter: invert(1);
+}
+
+/* ── Theme toggle button ─────────────────────────────────────────────────── */
+.theme-btn {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  transition:
+    background 0.4s ease,
+    border-color 0.4s ease,
+    color 0.4s ease,
+    box-shadow 0.4s ease;
+  pointer-events: all;
+}
+
+.theme-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(76, 201, 240, 0.35);
+}
+
+.theme-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Light-mode overrides */
+body.light .theme-btn {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+body.light .theme-btn:hover {
+  background: rgba(0, 0, 0, 0.10);
+  border-color: rgba(0, 0, 0, 0.35);
+  color: #000;
+  box-shadow: 0 0 12px rgba(114, 9, 183, 0.25);
 }
 
 #app {
@@ -42,6 +110,16 @@ canvas {
   box-sizing: border-box;
   color: white;
   text-shadow: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 40px rgba(255, 0, 255, 0.4);
+  transition: color 0.5s ease, text-shadow 0.5s ease;
+}
+
+body.light .overlay {
+  color: #111;
+  text-shadow: none;
+}
+
+body.light p {
+  color: rgba(0, 0, 0, 0.6);
 }
 
 h1 {
@@ -80,6 +158,19 @@ p {
   transition: color 0.4s ease, filter 0.5s ease, text-shadow 0.5s ease;
   filter: drop-shadow(0 0 0px transparent);
   overflow: hidden;
+}
+
+body.light .contact-links a {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+body.light .contact-links a:hover {
+  color: rgba(0, 0, 0, 0.9);
+  filter:
+    drop-shadow(0 0 6px rgba(114, 9, 183, 0.35)) drop-shadow(0 0 18px rgba(67, 97, 238, 0.25));
+  text-shadow:
+    0 0 8px rgba(114, 9, 183, 0.35),
+    0 0 22px rgba(67, 97, 238, 0.2);
 }
 
 .contact-links a:hover {
