@@ -132,6 +132,20 @@ body.light .about-bio {
   letter-spacing: 0.01em;
 }
 
+.about-bio__lines a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(0, 0, 0, 0.35);
+  transition: text-decoration-color 0.2s ease, color 0.2s ease;
+  pointer-events: auto;
+}
+
+.about-bio__lines a:hover {
+  color: #0a0a0a;
+  text-decoration-color: rgba(0, 0, 0, 0.8);
+}
+
 h1 {
   font-size: 3rem;
   font-weight: 300;
