@@ -278,8 +278,8 @@ const material = new THREE.ShaderMaterial({
 
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
 // Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = isLowEnd ? 50 : 150;   // tiered arm count
-const SWIRL_PTS     = isLowEnd ? 45 : 100;   // tiered points per arm
+const SWIRL_ARMS    = 100;   // number of spiral arms
+const SWIRL_PTS     = 70;   // points per arm
 const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
@@ -328,13 +328,13 @@ const flameVertexShader = `
     float spiralTurns = 1.8;
     float angle = armAngle + t * spiralTurns * 6.2831;
 
-    float outerR = 90.0 + aRandom.y * 28.0;
+    float outerR = 72.0 + aRandom.y * 20.0;
     float innerR = 4.0  + aRandom.y * 8.0;
     float radius  = mix(innerR, outerR, t);
 
     vec2 spiralXY = vec2(cos(angle), sin(angle)) * radius;
 
-    float wispAmp = t * 6.5;
+    float wispAmp = t * 3.5;
     float wispFreq = 3.0 + aRandom.z * 2.0;
     vec2 perp = vec2(-sin(angle), cos(angle));
     float wisp = sin(tAlong * wispFreq * 6.28 + uTime * 0.8 + aRandom.z * 6.28) * wispAmp;
@@ -372,7 +372,7 @@ const flameVertexShader = `
     float edgeFade  = smoothstep(0.0, 0.18, tAlong);
     float coreFade  = smoothstep(0.0, 0.12, t);
     float shimmer   = 0.55 + 0.45 * sin(tAlong * 10.0 + uTime * 1.2 + aRandom.z * 6.28);
-    vFlameOpacity   = edgeFade * coreFade * shimmer * 0.38;
+    vFlameOpacity   = edgeFade * coreFade * shimmer * 0.22;
     vT = tAlong;
 
     // Ripple colour influence — peaks right on the wave ring, fades out
@@ -607,7 +607,7 @@ let cameraTargetZ = 45;
 function updateCameraTargetZ() {
   const isMobile = window.innerWidth < 768;
   if (isStringTheoryMode) {
-    cameraTargetZ = isMobile ? 72 : 45;
+    cameraTargetZ = isMobile ? 85 : 60;
   } else {
     cameraTargetZ = isMobile ? 62 : 45;
   }
