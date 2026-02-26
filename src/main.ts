@@ -15,9 +15,11 @@ const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "h
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 // Adaptive pixel ratio: cap lower on weak devices (low CPU count = likely mobile/low-end)
-const isLowEnd = navigator.hardwareConcurrency <= 4;
+const isLowEnd  = navigator.hardwareConcurrency <= 4;
 const isMidRange = navigator.hardwareConcurrency <= 8;
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowEnd ? 1 : isMidRange ? 2 : 2));
+const isMobile  = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+// Mobile GPUs are weak and screens have high DPR (3×) — cap aggressively
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowEnd ? 1 : isMobile ? 1.5 : isMidRange ? 2 : 2));
 document.getElementById('app')?.appendChild(renderer.domElement);
 
 // Post-Processing (Bloom for the Ethereal Glow)
@@ -35,13 +37,13 @@ const composer = new EffectComposer(renderer);
 composer.addPass(renderScene);
 composer.addPass(bloomPass);
 
-// Bloom is expensive (5 internal passes) — skip it entirely on low-end GPUs
-if (isLowEnd) bloomPass.enabled = false;
+// Bloom is expensive (5 internal passes) — skip it on low-end or mobile GPUs
+if (isLowEnd || isMobile) bloomPass.enabled = false;
 
 // Swirl Theory Geometry setup - Converting to Dotted Lines / Particles
 // Tiered geometry density based on device capability
-const STRINGS_COUNT      = isLowEnd ? 350 : 950;
-const POINTS_PER_STRING  = isLowEnd ? 50  : 100;
+const STRINGS_COUNT      = isLowEnd ? 250 : isMobile ? 400 : 950;
+const POINTS_PER_STRING  = isLowEnd ? 40  : isMobile ? 55  : 100;
 const SEGS_PER_STRING = POINTS_PER_STRING - 1; // segments between consecutive points
 const TOTAL_VERTICES = STRINGS_COUNT * SEGS_PER_STRING * 2; // 2 verts per segment
 
@@ -278,8 +280,8 @@ const material = new THREE.ShaderMaterial({
 
 // ─── SPIRAL SWIRL ────────────────────────────────────────────────────────────
 // Logarithmic spiral arms that revolve very slowly from the screen edges inward.
-const SWIRL_ARMS    = 100;   // number of spiral arms
-const SWIRL_PTS     = 70;   // points per arm
+const SWIRL_ARMS    = isMobile ? 55  : 100;   // number of spiral arms
+const SWIRL_PTS     = isMobile ? 45  : 70;    // points per arm
 const SWIRL_SEGS    = SWIRL_PTS - 1;
 const SWIRL_TOTAL   = SWIRL_ARMS * SWIRL_SEGS * 2;
 
@@ -453,8 +455,8 @@ scene.add(flamePoints);
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── STRING THEORY (original) — sphere of vibrating dotted strings ────────────
-const ST_STRINGS_COUNT  = isLowEnd ? 350 : 950;
-const ST_POINTS_PER_STR = isLowEnd ?  50 : 100;
+const ST_STRINGS_COUNT  = isLowEnd ? 250 : isMobile ? 400 : 950;
+const ST_POINTS_PER_STR = isLowEnd ?  40 : isMobile ?  55 : 100;
 const ST_TOTAL_VERTS    = ST_STRINGS_COUNT * ST_POINTS_PER_STR;
 
 const stPositions = new Float32Array(ST_TOTAL_VERTS * 3);
@@ -807,8 +809,8 @@ window.addEventListener('pointerdown', (event) => {
 // Animation Loop
 const clock = new THREE.Clock();
 
-// 30fps cap on low-end devices to reduce CPU/GPU pressure
-const MIN_FRAME_MS = isLowEnd ? 1000 / 30 : 0;
+// 30fps cap on low-end / mobile devices to reduce CPU/GPU pressure
+const MIN_FRAME_MS = (isLowEnd || isMobile) ? 1000 / 30 : 0;
 let   lastFrameMs  = 0;
 
 function animate(nowMs: number = 0) {
