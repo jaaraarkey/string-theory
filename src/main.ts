@@ -401,6 +401,7 @@ const flameFragmentShader = `
   varying float vRippleInfluence;
   varying float vRippleAge;
   uniform float uGlobalOpacity;
+  uniform float uOpacityScale;
 
   void main() {
     // Base palette: deep violet → lavender silver → ice white
@@ -430,7 +431,7 @@ const flameFragmentShader = `
 
     col = mix(col, rippleCol, vRippleInfluence);
 
-    gl_FragColor = vec4(col, vFlameOpacity * uGlobalOpacity);
+    gl_FragColor = vec4(col, vFlameOpacity * uGlobalOpacity * uOpacityScale);
   }
 `;
 
@@ -444,6 +445,7 @@ const flameMaterial = new THREE.ShaderMaterial({
     uRippleOrigin: { value: new THREE.Vector3(0, 0, 0) },
     uRippleTime:   { value: -1.0 }, // -1 = no active ripple
     uGlobalOpacity:{ value: 1.0 },
+    uOpacityScale: { value: isMobile ? 2.2 : 1.0 },
   },
   transparent: true,
   depthWrite:  false,
