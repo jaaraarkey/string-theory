@@ -669,7 +669,7 @@ const IDLE_TIMEOUT   = 1800;  // ms of no pointer movement before sinking starts
 let   lastMoveTime   = Date.now();
 let   isSinking      = false;
 let   isResting      = false;
-//!
+
 // Swirl velocity tracking — used for inertia when sink begins
 const swirlVel     = new THREE.Vector3(); // world units per frame
 const prevSwirlPos = new THREE.Vector3(); // previous frame position
@@ -991,7 +991,7 @@ overlay.innerHTML = `
 
   <div class="about-bio">
     <p class="about-bio__greeting">Hi, I'm Oleg aka Jaar.</p>
-    <p class="about-bio__lines">Developer. Graphic designer.<br>Creative edge. Analytical core.<br>Rust, Flutter, JS, ICP. <br/>Feel free to reach out via<br/> <a href="https://www.linkedin.com/in/oleg-dyachenko-287125b9/" target="_blank" rel="noopener">Linkedin</a> or <a href="https://github.com/jaaraarkey" target="_blank" rel="noopener">GitHub</a>!</p>
+    <p class="about-bio__lines">Developer. Graphic designer.<br>Creative edge. Analytical core.<br>Rust, Flutter, JS, ICP. <br/>Feel free to reach me out via<br/> <a href="https://www.linkedin.com/in/oleg-dyachenko-287125b9/" target="_blank" rel="noopener">Linkedin</a> or <a href="https://github.com/jaaraarkey" target="_blank" rel="noopener">GitHub</a>!</p>
   </div>
 
   <nav class="contact-links">
